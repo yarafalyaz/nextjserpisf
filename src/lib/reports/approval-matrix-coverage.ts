@@ -80,19 +80,19 @@ export interface ApprovalMatrixCoverage {
 }
 
 export const APPROVAL_MATRIX_M2_OBSERVASI =
-  "M2: tanpa workflow aktif — permintaan approval no-op, dokumen jalan tanpa gerbang"
+  "M2: tanpa workflow aktif – permintaan approval no-op, dokumen jalan tanpa gerbang"
 
 export const APPROVAL_MATRIX_M3_OBSERVASI =
-  "M3: tanpa baris Approval — gerbang assertApproved lolos (fail-open hari ini)"
+  "M3: tanpa baris Approval – gerbang assertApproved lolos (fail-open hari ini)"
 
 export const APPROVAL_MATRIX_EMPTY_STEP_OBSERVASI =
-  "E146-2: langkah tanpa roleId dan userId — persetujuan jatuh ke approve_workflows (admin saja)"
+  "E146-2: langkah tanpa roleId dan userId – persetujuan jatuh ke approve_workflows (admin saja)"
 
 export const APPROVAL_MATRIX_SOD_OBSERVASI =
-  "E146-3: requested_by tercatat sebagai approver — SoD mati pada dokumen ini"
+  "E146-3: requested_by tercatat sebagai approver – SoD mati pada dokumen ini"
 
 export const APPROVAL_MATRIX_NO_STEP_OBSERVASI =
-  "E146-1: workflow aktif tanpa langkah — tidak ada tingkat persetujuan terisi"
+  "E146-1: workflow aktif tanpa langkah – tidak ada tingkat persetujuan terisi"
 
 export function evaluateApprovalMatrixCoverage(
   config: ApprovalMatrixCoverageConfig,

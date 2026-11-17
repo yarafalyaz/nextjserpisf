@@ -95,7 +95,7 @@ const PO_BILL = (items: unknown[], extra: Record<string, string> = {}) =>
     vendorId: "1",
     purchaseOrderId: "1",
     date: "2026-06-12",
-    terms: "TERMIN 1/2 — DP 50% PO-001",
+    terms: "TERMIN 1/2 - DP 50% PO-001",
     subtotal: "100000",
     tax: "0",
     grandTotal: "100000",
@@ -107,7 +107,7 @@ const PO_BILL = (items: unknown[], extra: Record<string, string> = {}) =>
 function draftBill(over: Record<string, unknown> = {}) {
   const bill = {
     id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
-    subtotal: 100000, tax: 0, grandTotal: 100000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
+    subtotal: 100000, tax: 0, grandTotal: 100000, taxInvoiceNumber: null, terms: "TERMIN 1/1 - lunas",
     ...over,
   }
   mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue(bill)
@@ -161,7 +161,7 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     ["E157B-6 bebas ditolak", "cicil 3x santai", false],
     ["E157B-6 tanpa acuan ditolak", "TERMIN 1/2", false],
     ["E157B-7 kosong = termin tunggal lolos", null, true],
-    ["E157B-7 format acuan lolos", "TERMIN 1/2 — DP 50% PO-001", true],
+    ["E157B-7 format acuan lolos", "TERMIN 1/2 - DP 50% PO-001", true],
   ])("%s", async (_label, terms, pass) => {
     mocks.prismaMock.vendorBill.create.mockClear()
     const f = PO_BILL(

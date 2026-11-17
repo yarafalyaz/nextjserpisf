@@ -35,7 +35,7 @@ export function StaleLeadsCard({ stale }: Readonly<{ stale: StaleLeads }>) {
       <div className="p-4 px-5">
         {stale.rows.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Tidak ada prospek basi — semua prospek baru/dihubungi masih aktif ditindaklanjuti
+            Tidak ada prospek basi, semua prospek baru/dihubungi masih aktif ditindaklanjuti
           </p>
         ) : (
           <DetailTable>

@@ -170,7 +170,7 @@ export function PkwtCompensationPanel({
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Peristiwa per segmen kontrak terbekukan dari server. Nominal, masa kerja,
-          dan status ditampilkan apa adanya — pembayaran hanya lewat slip gaji dari
+          dan status ditampilkan apa adanya, pembayaran hanya lewat slip gaji dari
           peristiwa yang sudah disetujui.
         </p>
       </div>
@@ -396,7 +396,7 @@ export function PkwtCompensationPanel({
                 <option value="">Pilih peristiwa...</option>
                 {approvedRows.map((row) => (
                   <option key={row.eventId} value={row.eventId}>
-                    {row.employeeName} — {formatDate(row.segmentStart)} – {formatDate(row.segmentEnd)} — {formatCurrencyExact(row.amount)}
+                    {row.employeeName}, {formatDate(row.segmentStart)} – {formatDate(row.segmentEnd)}, {formatCurrencyExact(row.amount)}
                   </option>
                 ))}
               </select>
@@ -419,7 +419,7 @@ export function PkwtCompensationPanel({
                 <option value="">Pilih slip draf...</option>
                 {draftSlips.map((slip) => (
                   <option key={slip.id} value={slip.id}>
-                    {slip.documentNo} — {slip.employeeName ?? "-"} — {slip.period}
+                    {slip.documentNo}, {slip.employeeName ?? "-"}, {slip.period}
                   </option>
                 ))}
               </select>
@@ -439,7 +439,7 @@ export function PkwtCompensationPanel({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground md:col-span-3">
-              Nominal slip wajib sama dengan nominal peristiwa penuh — pembayaran parsial ditolak server.
+              Nominal slip wajib sama dengan nominal peristiwa penuh, pembayaran parsial ditolak server.
             </p>
           </form>
         )}
@@ -450,7 +450,7 @@ export function PkwtCompensationPanel({
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
               <dt className="text-xs text-muted-foreground">
                 Saldo GL Utang Kompensasi (210207)
-                {report.glIsCompanyWide && " — saldo perusahaan"}
+                {report.glIsCompanyWide && "(saldo perusahaan"}
               </dt>
               <dd className="text-base font-semibold text-foreground">{formatCurrencyExact(report.glPayableBalance)}</dd>
               {report.glIsCompanyWide && (

@@ -71,7 +71,7 @@ export default async function PnLByCostCenterPage({
               label: "Pusat Biaya",
               placeholder: "Cari pusat biaya (kode / nama)...",
               value: costCenterRow ? (costCenterRow.slug ?? String(costCenterRow.id)) : "",
-              options: costCenters.map((cc) => ({ value: cc.slug ?? String(cc.id), label: `${cc.code} — ${cc.name}` })),
+              options: costCenters.map((cc) => ({ value: cc.slug ?? String(cc.id), label: `${cc.code} - ${cc.name}` })),
             },
           ]}
         />

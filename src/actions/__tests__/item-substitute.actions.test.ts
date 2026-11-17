@@ -148,7 +148,7 @@ describe("createItemSubstitute", () => {
     const res = await createItemSubstitute({ itemId: 1, substituteItemId: 2 })
     expect(res).toEqual({
       success: false,
-      error: "Pasangan substitusi ini sudah aktif — pasangan aktif ganda ditolak",
+      error: "Pasangan substitusi ini sudah aktif – pasangan aktif ganda ditolak",
     })
     expect(mocks.txMock.itemSubstitute.create).not.toHaveBeenCalled()
   })

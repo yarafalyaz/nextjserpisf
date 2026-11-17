@@ -78,7 +78,7 @@ async function assertSingleActiveWorkflowForType(
   const dupe = dupeRows.find((r) => r.id !== excludeId) ?? null;
   if (dupe) {
     throw new Error(
-      "Tipe dokumen ini sudah punya alur persetujuan aktif lain — nonaktifkan alur tersebut terlebih dahulu sebelum mengaktifkan yang baru.",
+      "Tipe dokumen ini sudah punya alur persetujuan aktif lain – nonaktifkan alur tersebut terlebih dahulu sebelum mengaktifkan yang baru.",
     );
   }
 }
@@ -105,7 +105,7 @@ async function logMoneyGateChange(
     action,
     "ApprovalWorkflow",
     workflow.id,
-    `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${detail} — gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat`,
+    `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${detail} (gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat)`,
     action === "retype"
       ? { modelType: workflow.modelType, newModelType: workflow.newModelType }
       : { modelType: workflow.modelType },
@@ -718,7 +718,7 @@ export async function reopenApproval(approvalId: number) {
         });
         if (reset.count === 0) {
           throw new Error(
-            `Dokumen ${refType} #${refId} tidak lagi berstatus ditolak — dibuka ulang dibatalkan; muat ulang dokumen.`,
+            `Dokumen ${refType} #${refId} tidak lagi berstatus ditolak – dibuka ulang dibatalkan; muat ulang dokumen.`,
           );
         }
       }
@@ -727,7 +727,7 @@ export async function reopenApproval(approvalId: number) {
       const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
       const reopened = await requestApprovalIfConfigured(refType, refId, Number(user.id), tx);
       if (!reopened) {
-        throw new Error("Gagal membuka ulang persetujuan — approval pending baru tidak terbentuk. Periksa alur persetujuan aktif untuk dokumen ini.");
+        throw new Error("Gagal membuka ulang persetujuan – approval pending baru tidak terbentuk. Periksa alur persetujuan aktif untuk dokumen ini.");
       }
     });
 
@@ -888,7 +888,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
     if (typeof pendingApprovals === "number") {
       return {
         success: false,
-        error: `Tidak bisa mengubah langkah alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan. Selesaikan atau tolak terlebih dahulu.`,
+        error: `Tidak bisa mengubah langkah alur – masih ada ${pendingApprovals} persetujuan yang sedang berjalan. Selesaikan atau tolak terlebih dahulu.`,
       };
     }
 
@@ -950,7 +950,7 @@ export async function deleteApprovalWorkflow(id: number) {
     if (typeof pendingApprovals === "number") {
       return {
         success: false,
-        error: `Tidak bisa menghapus alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan.`,
+        error: `Tidak bisa menghapus alur – masih ada ${pendingApprovals} persetujuan yang sedang berjalan.`,
       };
     }
 

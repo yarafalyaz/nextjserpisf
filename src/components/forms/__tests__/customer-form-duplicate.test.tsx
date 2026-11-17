@@ -24,7 +24,7 @@ const mockedError = vi.mocked(showError)
 
 const warning = {
   title: "Kemungkinan pelanggan ganda" as const,
-  body: "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu — pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master." as const,
+  body: "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu, pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master." as const,
   candidates: [
     {
       id: 7,
@@ -89,13 +89,13 @@ describe("CustomerForm — duplikat F-2026-10-25-003-S", () => {
       slug: "budi-santoso",
       reused: true,
       reusedCustomer: { id: 7, name: "Budi Santoso", code: "CUST-0007", slug: "budi-santoso" },
-      message: "Pelanggan sudah ada — data lama dipakai kembali, tidak dibuat ganda.",
+      message: "Pelanggan sudah ada, data lama dipakai kembali, tidak dibuat ganda.",
     })
     { const container = document.createElement("div"); document.body.appendChild(container); {
       const root = mountInto(container, <CustomerForm />)
       await submitFilledForm(container)
       expect(mockedSuccess).toHaveBeenCalledWith(
-        "Pelanggan sudah ada — data lama dipakai kembali, tidak dibuat ganda.",
+        "Pelanggan sudah ada, data lama dipakai kembali, tidak dibuat ganda.",
       )
       expect(mockedSuccess).not.toHaveBeenCalledWith("Data berhasil ditambahkan")
       unmount(root, container)

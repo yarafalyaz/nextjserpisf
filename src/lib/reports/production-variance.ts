@@ -421,7 +421,7 @@ export function buildProductionVariance(
     rows.push({
       kind: "notice",
       text:
-        `${uncalibratedOrders} perintah produksi memuat bahan tanpa standar terkalibrasi (standar nol) — ` +
+        `${uncalibratedOrders} perintah produksi memuat bahan tanpa standar terkalibrasi (standar nol) – ` +
         `selisihnya ditampilkan sebagai pemakaian dan tidak boleh dijurnalkan sebagai disposisi varians.`,
     })
   }
@@ -429,7 +429,7 @@ export function buildProductionVariance(
     rows.push({
       kind: "notice",
       text:
-        `Selisih rekonsiliasi ${amount(totals.varianceDrift)} antara varians hitung ulang dan kolom varians order — ` +
+        `Selisih rekonsiliasi ${amount(totals.varianceDrift)} antara varians hitung ulang dan kolom varians order – ` +
         `periksa order yang rilis parsialnya belum final.`,
     })
   }
@@ -444,7 +444,7 @@ export function buildProductionVariance(
           .map((c) => {
             const name = itemNames?.get(c.itemId)
             const label = name ? `${name} (#${c.itemId})` : `Barang #${c.itemId}`
-            return `${label} maks ${c.maxAbsVariancePct}% — usulan standar ${amount(c.suggestedStandardCost)} (tinjau manual, bukan tulisan otomatis)`
+            return `${label} maks ${c.maxAbsVariancePct}% – usulan standar ${amount(c.suggestedStandardCost)} (tinjau manual, bukan tulisan otomatis)`
           })
           .join("; ") +
         ".",

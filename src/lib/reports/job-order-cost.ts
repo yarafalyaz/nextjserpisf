@@ -190,7 +190,7 @@ export function buildJobOrderCost(input: {
       kind: "notice",
       text:
         `${withoutOutput} pekerjaan sudah menyerap biaya tetapi belum menghasilkan unit, jadi biaya per unitnya belum bisa ` +
-        `dihitung — biayanya masih berstatus barang dalam proses (WIP).`,
+        `dihitung – biayanya masih berstatus barang dalam proses (WIP).`,
     })
   }
 

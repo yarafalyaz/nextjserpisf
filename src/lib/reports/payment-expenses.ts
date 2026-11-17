@@ -143,5 +143,5 @@ export function paymentExpensesSummary(result: PaymentExpensesResult): string {
   const perSource = result.bySource
     .map((summary) => `${summary.source} ${summary.count} dokumen (${amount(summary.adminFee)})`)
     .join(" · ")
-  return `${result.totals.count} dokumen · total beban ${amount(result.totals.adminFee)}${perSource ? ` — ${perSource}` : ""}`
+  return `${result.totals.count} dokumen · total beban ${amount(result.totals.adminFee)}${perSource ? `, ${perSource}` : ""}`
 }

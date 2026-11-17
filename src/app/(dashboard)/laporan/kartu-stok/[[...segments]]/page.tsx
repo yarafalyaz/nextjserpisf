@@ -183,7 +183,7 @@ export default async function StockCardPage({
 
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
   const eyebrow = selectedItem
-    ? `${selectedItem.sku} — ${selectedItem.name} (${selectedItem.unitOfMeasure})`
+    ? `${selectedItem.sku} - ${selectedItem.name} (${selectedItem.unitOfMeasure})`
     : undefined
 
   return (
@@ -215,14 +215,14 @@ export default async function StockCardPage({
               placeholder: "Cari barang (SKU / nama)...",
               required: true,
               value: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
-              options: items.map((item) => ({ value: item.slug ?? String(item.id), label: `${item.sku} — ${item.name}` })),
+              options: items.map((item) => ({ value: item.slug ?? String(item.id), label: `${item.sku} - ${item.name}` })),
             },
             {
               param: "gudang",
               label: "Gudang",
               placeholder: "Semua Gudang",
               value: selectedWarehouse ? (selectedWarehouse.slug ?? String(selectedWarehouse.id)) : "",
-              options: scopedWarehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
+              options: scopedWarehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} - ${w.name}` })),
             },
           ]}
         />

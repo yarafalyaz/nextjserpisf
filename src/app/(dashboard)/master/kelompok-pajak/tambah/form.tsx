@@ -50,7 +50,7 @@ export function TaxGroupForm({ taxes }: Props) {
                 <Link href="/master/pajak/tambah" className="text-primary hover:underline">
                   Buat pajak dulu
                 </Link>{" "}
-                — kelompok wajib berisi minimal satu pajak.
+, kelompok wajib berisi minimal satu pajak.
               </p>
             ) : null}
             {taxes.map((tax) => (

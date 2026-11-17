@@ -107,7 +107,7 @@ export function CustomerCommissionRates({
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-foreground">Tarif Komisi per Kategori Pelanggan</h2>
         <p className="text-sm text-muted-foreground">
-          Histori bertanggal tampil apa adanya dari server. Menambah tarif membuat baris histori baru —
+          Histori bertanggal tampil apa adanya dari server. Menambah tarif membuat baris histori baru;
           baris lama tidak ditimpa. Tarif yang sudah menjadi sumber snapshot faktur tidak dapat diubah
           atau dihapus (server menolak); masa berlakunya masih dapat ditutup.
         </p>

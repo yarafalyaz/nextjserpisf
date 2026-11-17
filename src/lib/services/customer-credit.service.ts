@@ -64,7 +64,7 @@ export async function allocateCreditToInvoice(
     const dpAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
     const arAccountId = (settings as { salesReceivableAccountId?: number | null }).salesReceivableAccountId ?? null;
     if (!dpAccountId || !arAccountId) {
-      return { success: false, error: "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi kredit ditolak" };
+      return { success: false, error: "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi, alokasi kredit ditolak" };
     }
     await prisma.$transaction(async (tx) => {
       // AUD-R7-02/03: claim validasi scope+hasil. Replay = return + teruskan
@@ -267,12 +267,12 @@ export async function refundCredit(
           });
           if (activeFp) {
             throw definitive(
-              `FP uang muka #${activeFp.id} masih aktif — batalkan FP UM dulu sebelum refund DP terutang (J-RF1)`,
+              `FP uang muka #${activeFp.id} masih aktif, batalkan FP UM dulu sebelum refund DP terutang (J-RF1)`,
             );
           }
           const taxAccountId = (settings as { salesTaxAccountId?: number | null }).salesTaxAccountId ?? null;
           if (!taxAccountId) {
-            throw definitive("Akun PPN Keluaran (210201) belum dikonfigurasi — refund DP terutang ditolak");
+            throw definitive("Akun PPN Keluaran (210201) belum dikonfigurasi, refund DP terutang ditolak");
           }
           const accountByKey = {
             cashBank: settings.cashBankAccountId!,
@@ -369,7 +369,7 @@ export async function refundCredit(
               ) / 100;
             if (residue > 0) {
               throw definitive(
-                `FP uang muka ${fpNo} untuk DP ${d.documentNo} masih aktif dengan sisa uang muka belum teralokasi — batalkan FP UM dulu atau alokasikan DP sampai habis sebelum refund kredit quotation ini (086-V)`,
+                `FP uang muka ${fpNo} untuk DP ${d.documentNo} masih aktif dengan sisa uang muka belum teralokasi, batalkan FP UM dulu atau alokasikan DP sampai habis sebelum refund kredit quotation ini (086-V)`,
               );
             }
           }

@@ -207,7 +207,7 @@ export async function onGoodsReceiptVerified(
       const raw = factorMap.get(`${itemId}:${uom}`);
       if (raw == null || !(raw > 0)) {
         console.warn(
-          `[goods-receipt.hook] konversi ${uom} untuk item #${itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar ${meta.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+          `[goods-receipt.hook] konversi ${uom} untuk item #${itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`}, qty dihitung 1:1 dalam satuan dasar ${meta.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
         );
         return qty;
       }
@@ -384,7 +384,7 @@ export async function onGoodsReceiptVerified(
         // (never silent; throwing would break the sales quick-add UoM flow).
         if (raw == null || !(raw > 0)) {
           console.warn(
-            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar ${meta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`}, qty dihitung 1:1 dalam satuan dasar ${meta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
           );
         } else {
           f = raw;
@@ -446,14 +446,14 @@ export async function onGoodsReceiptVerified(
     // V5: fallback bobot wajib berisik, bukan diam-diam.
     if (landed.weightFallback) {
       console.warn(
-        `[goods-receipt.hook] PUR-BR-008 V5: nilai beli neto PO nol/tidak terbaca — bobot alokasi landed cost jatuh ke ${landed.weightFallback === "qty" ? "QTY" : "RATA"} untuk GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`}. Perbaiki harga satuan neto baris PO agar alokasi berbasis nilai.`,
+        `[goods-receipt.hook] PUR-BR-008 V5: nilai beli neto PO nol/tidak terbaca, bobot alokasi landed cost jatuh ke ${landed.weightFallback === "qty" ? "QTY" : "RATA"} untuk GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`}. Perbaiki harga satuan neto baris PO agar alokasi berbasis nilai.`,
       );
     }
     // V7: pool tanpa baris barang tujuan tidak boleh hilang. Nilainya dijurnal
     // sebagai beban jasa/penerimaan (named expense) di bawah, bukan disenyapkan.
     if (landed.unallocatedPool > 0) {
       console.warn(
-        `[goods-receipt.hook] PUR-BR-008 V7: GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`} tidak punya baris barang — ongkir Rp${landed.unallocatedPool.toFixed(2)} tidak dikapitalisasi dan dibebankan sebagai beban periode (bukan nilai stok).`,
+        `[goods-receipt.hook] PUR-BR-008 V7: GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`} tidak punya baris barang, ongkir Rp${landed.unallocatedPool.toFixed(2)} tidak dikapitalisasi dan dibebankan sebagai beban periode (bukan nilai stok).`,
       );
     }
 
@@ -503,7 +503,7 @@ export async function onGoodsReceiptVerified(
         const fetched = factorMap.get(`${item.itemId}:${item.uom}`);
         if (fetched == null || !(fetched > 0)) {
           console.warn(
-            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — qty dihitung 1:1 dalam satuan dasar ${itemMeta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`}, qty dihitung 1:1 dalam satuan dasar ${itemMeta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
           );
         } else {
           factor = fetched;

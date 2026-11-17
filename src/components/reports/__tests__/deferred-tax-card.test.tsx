@@ -47,7 +47,7 @@ describe("DeferredTaxCard F-2026-10-23-112 + F-2026-10-23-124-V", () => {
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Perbedaan Temporer Pajak Tangguhan"]')).not.toBeNull()
     expect(text).toContain("Kena pajak (liabilitas)")
-    expect(text).toContain("tarif pasokan operator — bukan master")
+    expect(text).toContain("tarif pasokan operator – bukan master")
     expect(text).toContain("Dapat dikurangkan (aset)")
     expect(text).toContain("Belum dapat dihitung")
     expect(text).toContain(DEFERRED_TAX_NOTICE)
@@ -98,10 +98,10 @@ describe("DeferredTaxCard F-2026-10-23-112 + F-2026-10-23-124-V", () => {
     expect(text).toContain("Fiskal belum terbekukan")
     expect(text).toContain("Fiskal belum terbekukan (metode-belum-dipilih)")
     expect(text).toContain("1 fiskal belum terbekukan")
-    expect(text).toContain("tarif pasokan operator — bukan master")
+    expect(text).toContain("tarif pasokan operator – bukan master")
     // String persis berkutip hanya lahir dari ringkasan kartu + verdict builder;
     // notice tabel memakai format "Tarif 22% adalah ..." (tanpa kurung).
-    expect(text.split("tarif 22% (tarif pasokan operator — bukan master)").length - 1).toBeGreaterThanOrEqual(2)
+    expect(text.split("tarif 22% (tarif pasokan operator – bukan master)").length - 1).toBeGreaterThanOrEqual(2)
     expect(text).toContain(report.verdict)
     expect(container.querySelector("button")).toBeNull()
     unmountCard(root)

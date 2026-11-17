@@ -74,7 +74,7 @@ export function TaxDisputeDecisionForm({
       className="flex flex-col gap-5 rounded-xl border border-default bg-surface p-6 shadow-sm"
     >
       <p className="text-sm text-muted-foreground">
-        Empat mata: perekam putusan harus berbeda dari pengaju upaya — bila sama, server menolak.
+        Empat mata: perekam putusan harus berbeda dari pengaju upaya, bila sama, server menolak.
       </p>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">

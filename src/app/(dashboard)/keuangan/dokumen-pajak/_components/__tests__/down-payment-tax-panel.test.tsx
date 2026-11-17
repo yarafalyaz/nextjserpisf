@@ -44,7 +44,7 @@ const BASE: DownPaymentTaxRowView = {
   taxInvoiceId: null,
   taxInvoiceNumber: null,
   taxStatus: "terutang-belum-terbit",
-  taxStatusLabel: "PPN uang muka terutang — FP UM belum terbit",
+  taxStatusLabel: "PPN uang muka terutang – FP UM belum terbit",
 } as DownPaymentTaxRowView
 
 const ISSUED: DownPaymentTaxRowView = {
@@ -91,7 +91,7 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
     const { container } = mount(<DownPaymentTaxPanel rows={[BASE, ISSUED]} canIssue />)
     expect(container.textContent).toContain("DP-2026-001")
     expect(container.textContent).toContain("PT Uji")
-    expect(container.textContent).toContain("PPN uang muka terutang — FP UM belum terbit")
+    expect(container.textContent).toContain("PPN uang muka terutang – FP UM belum terbit")
     expect(container.textContent).toContain("FP uang muka terbit")
     expect(container.textContent).toContain("010.000-26.00000007")
   })
@@ -105,7 +105,7 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
   it("tanpa izin create_tax_invoices: form terbit disembunyikan", () => {
     const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue={false} />)
     expect(container.querySelectorAll("button")).toHaveLength(0)
-    expect(container.textContent).toContain("PPN uang muka terutang — FP UM belum terbit")
+    expect(container.textContent).toContain("PPN uang muka terutang – FP UM belum terbit")
   })
 
   it("submit kirim downPaymentId + nomor DJP + idempotencyKey ke action", async () => {
@@ -137,14 +137,14 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
   })
 
   it("galat gerbang identitas tampil verbatim lewat toast error", async () => {
-    issueAction.mockResolvedValue({ success: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain" })
+    issueAction.mockResolvedValue({ success: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi – periksa apakah NITKU milik entitas lain" })
     const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue />)
     openAndSubmit(container)
     act(() => {
       container.querySelector("form")!.requestSubmit()
     })
     await flush()
-    expect(showError).toHaveBeenCalledWith("NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain")
+    expect(showError).toHaveBeenCalledWith("NITKU lawan transaksi tidak diawali NPWP lawan transaksi – periksa apakah NITKU milik entitas lain")
   })
 
   it("checkbox konfirmasi NPWP 15 digit terkirim sebagai legacy15Confirmed", async () => {

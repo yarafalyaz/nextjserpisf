@@ -362,7 +362,7 @@ export default async function ProductionOrderDetailPage({
           </div>
           {productionVariance.uncalibratedLines > 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
-              {productionVariance.uncalibratedLines} baris bahan tanpa standar terkalibrasi — selisihnya tidak dijurnalkan sebagai disposisi.
+              {productionVariance.uncalibratedLines} baris bahan tanpa standar terkalibrasi, selisihnya tidak dijurnalkan sebagai disposisi.
             </p>
           ) : null}
         </section>

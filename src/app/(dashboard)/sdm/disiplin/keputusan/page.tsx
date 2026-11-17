@@ -62,7 +62,7 @@ export default async function CreateDisciplinaryDeductionDecisionPage() {
           id: r.id,
           employeeId: r.employeeId,
           documentNo: r.documentNo,
-          label: `${r.documentNo ?? "SP tanpa nomor"} — ${r.employee.name} (${r.level})`,
+          label: `${r.documentNo ?? "SP tanpa nomor"} – ${r.employee.name} (${r.level})`,
         }))}
         accounts={accounts}
       />

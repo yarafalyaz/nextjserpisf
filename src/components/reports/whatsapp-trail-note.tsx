@@ -39,7 +39,7 @@ export function WhatsappTrailNote({
             Estimasi selesai digeser dari{" "}
             {shift.oldEndDate ? formatDate(shift.oldEndDate) : "—"} ke{" "}
             {shift.newEndDate ? formatDate(shift.newEndDate) : "—"}
-            {label ? <> — {label}</> : null}
+            {label ? <> ({label})</> : null}
             {shift.reasonNote ? <> ({shift.reasonNote})</> : null} oleh{" "}
             {shift.userName ?? "Pengguna"} ·{" "}
             {formatDate(shift.createdAt, { includeTime: true })} WIB

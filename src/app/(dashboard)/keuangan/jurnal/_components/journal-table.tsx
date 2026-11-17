@@ -111,7 +111,7 @@ const columns = [
         }
         processConfirmBody={
           info.row.original.status?.toUpperCase() === "POSTED"
-            ? "Jurnal lawan (reversal) akan diterbitkan pada tanggal jurnal asal dan jurnal ini ditandai sudah dibalik. Jejak audit utuh — jurnal asal tidak dihapus."
+            ? "Jurnal lawan (reversal) akan diterbitkan pada tanggal jurnal asal dan jurnal ini ditandai sudah dibalik. Jejak audit utuh – jurnal asal tidak dihapus."
             : "Jurnal akan berstatus terposting sehingga masuk ke laporan keuangan (buku besar, neraca, laba rugi). Pastikan akun dan nominalnya sudah benar."
         }
         processSuccessMessage={

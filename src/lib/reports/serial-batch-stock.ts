@@ -211,7 +211,7 @@ export function buildSerialBatchStock(input: {
     rows.push({
       kind: "notice",
       text:
-        "Kuantitas TIDAK dijumlahkan lintas barang/satuan — kolom Jml hanya menyatakan isi tiap baris. " +
+        "Kuantitas TIDAK dijumlahkan lintas barang/satuan – kolom Jml hanya menyatakan isi tiap baris. " +
         "Nomor seri bernilai 1 unit per baris.",
     })
   }

@@ -67,7 +67,7 @@ describe("buildQuotationDraftQueue (builder murni, F-2026-10-26-055-S)", () => {
   it("konstanta ambang + label + notice verbatim putusan Q-QD-1/2", () => {
     expect(QUOTATION_DRAFT_EXPIRY_WARNING_DAYS).toBe(3)
     expect(QUOTATION_DRAFT_STAGE_LABELS).toEqual({
-      LEWAT_BELUM_TERKIRIM: "Lewat Masa Berlaku — Belum Terkirim",
+      LEWAT_BELUM_TERKIRIM: "Lewat Masa Berlaku – Belum Terkirim",
       MENIPIS: "Masa Berlaku Menipis",
       TERBUKA: "Terbuka",
       TANPA_BATAS: "Tanpa Masa Berlaku",

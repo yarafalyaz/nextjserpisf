@@ -41,7 +41,7 @@ export async function onExpenseApprovedSyncPettyCash(
     // Only sync if paid from a petty cash type account
     if (!expense.paidFromAccountId) {
       console.warn(
-        `[expense.hook] expense ${expense.documentNo ?? expenseId} tanpa paidFromAccountId — sinkron kas kecil dilewati`
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} tanpa paidFromAccountId, sinkron kas kecil dilewati`
       );
       return;
     }
@@ -52,7 +52,7 @@ export async function onExpenseApprovedSyncPettyCash(
     });
     if (!paidFromAccount) {
       console.warn(
-        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${expense.paidFromAccountId}) — sinkron dilewati`
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${expense.paidFromAccountId}), sinkron dilewati`
       );
       return;
     }
@@ -70,7 +70,7 @@ export async function onExpenseApprovedSyncPettyCash(
       : isPettyCashAccountName(paidFromAccount.name);
     if (!isPettyCash) {
       console.warn(
-        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount.name}) — sinkron dilewati`
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount.name}), sinkron dilewati`
       );
       return;
     }
@@ -94,7 +94,7 @@ export async function onExpenseApprovedSyncPettyCash(
     });
     if (existing) {
       console.info(
-        `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil ${existing.documentNo} — sinkron dilewati`,
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil ${existing.documentNo}, sinkron dilewati`,
       );
       return;
     }

@@ -104,14 +104,14 @@ describe("ReimbursementClaimForm", () => {
   it("error server verbatim saat gagal tanpa kandidat", async () => {
     createClaimMock.mockResolvedValueOnce({
       success: false,
-      error: "Akun Anda belum tertaut ke data karyawan — klaim mandiri tidak dapat diajukan.",
+      error: "Akun Anda belum tertaut ke data karyawan – klaim mandiri tidak dapat diajukan.",
     })
     const container = document.createElement("div")
     document.body.appendChild(container)
     const root = mount(container)
     await submitForm(container)
     expect(vi.mocked(showError)).toHaveBeenCalledWith(
-      "Akun Anda belum tertaut ke data karyawan — klaim mandiri tidak dapat diajukan.",
+      "Akun Anda belum tertaut ke data karyawan – klaim mandiri tidak dapat diajukan.",
     )
     act(() => root.unmount())
     container.remove()

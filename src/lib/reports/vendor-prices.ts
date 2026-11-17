@@ -104,7 +104,7 @@ export function buildVendorPriceListing(rows: VendorPriceInput[]): VendorPriceRe
     tableRows.push({
       kind: "notice",
       text:
-        `${uncomparable} barang hanya punya satu penawaran, jadi tidak ada pembanding harga — ` +
+        `${uncomparable} barang hanya punya satu penawaran, jadi tidak ada pembanding harga – ` +
         "tanda terendah sengaja tidak diberikan.",
     })
   }

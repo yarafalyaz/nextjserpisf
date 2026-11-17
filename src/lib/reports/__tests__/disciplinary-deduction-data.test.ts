@@ -69,7 +69,7 @@ describe("loadDisciplinaryDeductionDecisions", () => {
     expect(decision.suspensionKind).toBe("disiplin")
     expect(decision.suspensionPayTreatment).toBe("tidak_dibayar")
     expect(decision.regulationReference).toBe("PP Bab V Pasal 12")
-    expect(decision.compensationAccountLabel).toBe("510099 — Kompensasi Lain")
+    expect(decision.compensationAccountLabel).toBe("510099 (Kompensasi Lain)")
     expect(decision.contextDocumentNo).toBe("001/SP/YRA/10/2026")
     expect(decision.signerName).toBe("Direktur")
   })

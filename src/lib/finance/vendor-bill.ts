@@ -147,10 +147,10 @@ export function withholdingGuard(
 ): string | null {
   if (!Number.isFinite(amount) || amount <= 0) return null
   if (typeId == null) {
-    return "Nilai PPh dipotong wajib memilih jenis PPh — tanpa jenis, akun Hutang PPh tidak dapat ditentukan."
+    return "Nilai PPh dipotong wajib memilih jenis PPh – tanpa jenis, akun Hutang PPh tidak dapat ditentukan."
   }
   if (amount > grandTotal) {
-    return `Pemotongan PPh (${amount}) melebihi total keseluruhan tagihan (${grandTotal}) — periksa data tagihan vendor.`
+    return `Pemotongan PPh (${amount}) melebihi total keseluruhan tagihan (${grandTotal}) – periksa data tagihan vendor.`
   }
   return null
 }
@@ -174,7 +174,7 @@ export function sumBillItemDiscount(itemsJson: string | null | undefined): numbe
  * bill TANPA `terms` = termin tunggal, LULUS tanpa warning; bill tanpa PO =
  * teks bebas (Putusan 3 hanya mengikat bill ber-PO).
  */
-export const VENDOR_BILL_TERMS_REF_PATTERN = /^TERMIN\s+(\d+)\s*\/\s*(\d+)\s+[—–-]\s*\S/
+export const VENDOR_BILL_TERMS_REF_PATTERN = /^TERMIN\s+(\d+)\s*\/\s*(\d+)\s*[,:]?\s+[–-]\s*\S/
 
 export function isValidTermsReference(terms: string | null | undefined): boolean {
   const t = (terms ?? "").trim()
@@ -187,7 +187,7 @@ export function isValidTermsReference(terms: string | null | undefined): boolean
 }
 
 export const VENDOR_BILL_TERMS_REF_ERROR =
-  "Termin bill ber-PO wajib format referensi TERMIN n/m — <acuan> (contoh: TERMIN 1/3 — DP 30% PO-2026-001). Kosongkan bila termin tunggal."
+  "Termin bill ber-PO wajib format referensi TERMIN n/m - <acuan> (contoh: TERMIN 1/3 - DP 30% PO-2026-001). Kosongkan bila termin tunggal."
 
 const DAY_MS = 86_400_000
 

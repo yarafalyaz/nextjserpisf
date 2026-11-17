@@ -133,7 +133,7 @@ export default async function TaxAssessmentDetailPage({
           <TaxDisputeDecisionForm
             steps={activeSteps.map((s) => ({
               value: String(s.id),
-              label: `${TAX_DISPUTE_STEP_KIND_LABELS[s.kind] ?? s.kind}${s.filedAt ? ` — ${formatDate(s.filedAt)}` : ""}`,
+              label: `${TAX_DISPUTE_STEP_KIND_LABELS[s.kind] ?? s.kind}${s.filedAt ? `, ${formatDate(s.filedAt)}` : ""}`,
             }))}
           />
         </section>

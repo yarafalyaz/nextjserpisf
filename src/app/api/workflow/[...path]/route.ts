@@ -271,7 +271,7 @@ export async function POST(
               }
               if (resetCount === 0) {
                 return {
-                  error: apiError("CONFLICT", `Alur persetujuan ditolak — dokumen sudah berubah status`),
+                  error: apiError("CONFLICT", `Alur persetujuan ditolak – dokumen sudah berubah status`),
                 } as const
               }
               await requestApprovalIfConfigured(modelType, id, initiatorId, tx)
@@ -281,7 +281,7 @@ export async function POST(
               })
               if (!fresh || fresh.status !== "pending") {
                 return {
-                  error: apiError("CONFLICT", `Alur persetujuan ditolak — gagal membuka ulang`),
+                  error: apiError("CONFLICT", `Alur persetujuan ditolak – gagal membuka ulang`),
                 } as const
               }
               return { ok: true } as const

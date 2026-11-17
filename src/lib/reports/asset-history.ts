@@ -130,7 +130,7 @@ export function buildAssetHistory(input: {
       events.push({
         date: asset.purchaseDate,
         kind: "Perolehan",
-        description: `Perolehan aset${asset.location ? ` — lokasi ${asset.location}` : ""}`,
+        description: `Perolehan aset${asset.location ? `, lokasi ${asset.location}` : ""}`,
         amount: asset.purchaseCost,
       })
     }

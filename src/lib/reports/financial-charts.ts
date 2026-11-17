@@ -262,7 +262,7 @@ export function buildFinancialTrendTable(trend: FinancialTrend): { columns: Tabl
   } else {
     rows.push({
       kind: "notice",
-      text: "Angka posisi dan rasio ditampilkan per bulan apa adanya — tidak ada baris Jumlah, karena menjumlahkan saldo/rasio antar bulan akan menyesatkan.",
+      text: "Angka posisi dan rasio ditampilkan per bulan apa adanya – tidak ada baris Jumlah, karena menjumlahkan saldo/rasio antar bulan akan menyesatkan.",
     })
   }
 

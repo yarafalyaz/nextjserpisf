@@ -139,7 +139,7 @@ export function buildInvoiceExchangeListing(lines: ExchangeReportLine[]): Exchan
     kind: "notice",
     text:
       "Status pelunasan dihitung dari pembayaran tiap faktur (SalesInvoice.paidAmount), bukan disimpan di dokumen ini. " +
-      "Tukar faktur tidak membuat jurnal — piutang sudah tercatat oleh fakturnya.",
+      "Tukar faktur tidak membuat jurnal – piutang sudah tercatat oleh fakturnya.",
   })
 
   const verdict =

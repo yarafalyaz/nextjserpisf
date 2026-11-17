@@ -135,7 +135,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
             <option value="">-- Tanpa pusat laba --</option>
             {profitCenters.map((center) => (
               <option key={center.id} value={center.id}>
-                {center.code} — {center.name}
+                {center.code} – {center.name}
               </option>
             ))}
           </select>

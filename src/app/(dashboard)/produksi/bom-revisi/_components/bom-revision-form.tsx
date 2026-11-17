@@ -238,7 +238,7 @@ export function BomRevisionForm({
           )}
           <p className="text-xs text-muted-foreground">
             {revision
-              ? `Revisi #${revision.revisionNo} — draf`
+              ? `Revisi #${revision.revisionNo} (draf)`
               : "BOM yang sedang berlaku akan disalin sebagai titik awal revisi ini."}
           </p>
         </div>

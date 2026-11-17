@@ -45,7 +45,7 @@ export default async function AssetReconciliationPage() {
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {reconciliation.verdict}. Koreksi selisih hanya lewat jurnal
-        koreksi/reversal di periode terbuka — bukan edit currentValue/history.
+        koreksi/reversal di periode terbuka, bukan edit currentValue/history.
       </p>
     </ReportPageShell>
   )

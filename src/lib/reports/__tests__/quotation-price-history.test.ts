@@ -76,11 +76,11 @@ function event(overrides: Partial<QuotationPriceEventInput> = {}): QuotationPric
 describe("quotation-price-history builder (F-2026-10-25-039-S)", () => {
   it("notice BR-QPH-10 + penanda revisi berjalan + label ember verbatim", () => {
     expect(QUOTATION_PRICE_HISTORY_NOTICE_TEXT).toBe(
-      "Harga penawaran lampau — bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat.",
+      "Harga penawaran lampau – bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat.",
     )
     expect(QUOTATION_PRICE_HISTORY_CURRENT_REVISION_LABEL).toBe("Revisi berjalan")
     expect(QUOTATION_PRICE_HISTORY_BUCKET_LABELS).toEqual({
-      DRAFT: "DRAFT — BELUM TERKIRIM",
+      DRAFT: "DRAFT – BELUM TERKIRIM",
       TERKIRIM: "TERKIRIM",
       KEDALUWARSA: "KEDALUWARSA",
       DITERIMA: "DITERIMA",
@@ -144,7 +144,7 @@ describe("quotation-price-history builder (F-2026-10-25-039-S)", () => {
     const byQuotation = new Map(
       result.pasangan[0].kejadian.map((kejadian) => [kejadian.quotationId, kejadian]),
     )
-    expect(byQuotation.get(1)?.emberLabel).toBe("DRAFT — BELUM TERKIRIM")
+    expect(byQuotation.get(1)?.emberLabel).toBe("DRAFT – BELUM TERKIRIM")
     expect(byQuotation.get(2)?.emberLabel).toBe("TERKIRIM")
     expect(byQuotation.get(3)?.emberLabel).toBe("DITERIMA")
     expect(byQuotation.get(4)?.emberLabel).toBe("DITERIMA")
@@ -156,7 +156,7 @@ describe("quotation-price-history builder (F-2026-10-25-039-S)", () => {
       expect(kejadian.emberLabel).not.toMatch(/pasar|berlaku saat ini/i)
     }
     expect(result.pasangan[0].hitunganPerEmber).toEqual([
-      { ember: "DRAFT", label: "DRAFT — BELUM TERKIRIM", count: 1 },
+      { ember: "DRAFT", label: "DRAFT – BELUM TERKIRIM", count: 1 },
       { ember: "TERKIRIM", label: "TERKIRIM", count: 1 },
       { ember: "DITERIMA", label: "DITERIMA", count: 2 },
       { ember: "DITOLAK", label: "DITOLAK", count: 1 },

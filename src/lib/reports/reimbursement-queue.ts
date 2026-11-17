@@ -33,7 +33,7 @@ import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-tim
 /** Ambang mengendap (hari kalender WIB sejak J-RB1) — Q-RBQ-1: 3. */
 export const REIMBURSEMENT_QUEUE_STALE_DAYS = 3
 
-export const REIMBURSEMENT_QUEUE_TITLE = "Reimbursement Disetujui — Menunggu Pembayaran"
+export const REIMBURSEMENT_QUEUE_TITLE = "Reimbursement Disetujui – Menunggu Pembayaran"
 
 export const REIMBURSEMENT_QUEUE_NOTICE_TEXT =
   "Daftar ini hanya memuat klaim bertahap Disetujui yang belum terbukti dibayar oleh jurnal pembayaran aktif. Nominal yang tampil adalah nominal tersimpan klaim, bukan saldo utang atau aging akuntansi."
@@ -44,7 +44,7 @@ export const REIMBURSEMENT_QUEUE_PAID_WITHOUT_JOURNAL_LABEL =
 export const REIMBURSEMENT_QUEUE_NO_ACCRUAL_LABEL = "tanpa jurnal akrual"
 
 export const REIMBURSEMENT_QUEUE_TOTAL_LABEL =
-  "total nominal tersimpan baris tampil — bukan saldo buku"
+  "total nominal tersimpan baris tampil – bukan saldo buku"
 
 export const REIMBURSEMENT_QUEUE_LEVELS = ["mengendap", "menunggu"] as const
 export type ReimbursementQueueLevel = (typeof REIMBURSEMENT_QUEUE_LEVELS)[number]

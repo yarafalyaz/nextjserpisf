@@ -372,7 +372,7 @@ export default async function ProjectDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Baris rencana (estimasi RAB) — bukan bahan fisik terpakai. Biaya material aktual hanya diakui dari pengeluaran material selesai di Laba Rugi Proyek.
+                    Baris rencana (estimasi RAB), bukan bahan fisik terpakai. Biaya material aktual hanya diakui dari pengeluaran material selesai di Laba Rugi Proyek.
                   </p>
                   {project.items.length === 0 ? (
                     <EmptyState title="Tidak ada item" />

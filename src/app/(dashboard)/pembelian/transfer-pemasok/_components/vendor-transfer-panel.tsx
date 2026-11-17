@@ -154,7 +154,7 @@ export function VendorTransferPanel({ rows, canEdit = true }: { rows: TransferIn
 
       <p className="text-xs text-muted-foreground">
         Menandai transfer tidak membuat jurnal. Untuk pembayaran berstatus draft jurnalnya memang belum
-        ada — jurnal kas/bank baru dibuat saat pembayaran dikonfirmasi/diposting (aksi itu belum
+        ada, jurnal kas/bank baru dibuat saat pembayaran dikonfirmasi/diposting (aksi itu belum
         tersambung ke UI). Daftar ini hanya menandai pembayaran yang transfer banknya sudah dikirim.
       </p>
     </div>

@@ -1312,7 +1312,7 @@ export async function completeMaterialIssue(issueId: number) {
           });
           if (Number(poConsumed._sum.actualQty ?? 0) > 0) {
             throw new Error(
-              "WO ini sudah dikonsumsi via perintah produksi — batalkan/void MI ini dan gunakan jalur PO.",
+              "WO ini sudah dikonsumsi via perintah produksi – batalkan/void MI ini dan gunakan jalur PO.",
             );
           }
         }
@@ -1389,7 +1389,7 @@ async function assertLiveWorkOrderRefs(
     select: { id: true },
   });
   if (!customer) {
-    throw new Error("Pelanggan tidak ditemukan atau sudah nonaktif — pilih ulang pelanggan.");
+    throw new Error("Pelanggan tidak ditemukan atau sudah nonaktif – pilih ulang pelanggan.");
   }
   // Tautan penawaran wajib milik pelanggan yang sama. Tanpa ini WO bisa
   // menunjuk penawaran pihak lain: `createJobChangeOrder` menyalin
@@ -1402,7 +1402,7 @@ async function assertLiveWorkOrderRefs(
       where: { id: quotationId },
       select: { customerId: true, documentNo: true },
     });
-    if (!quotation) throw new Error("Penawaran tidak ditemukan — pilih ulang penawaran.");
+    if (!quotation) throw new Error("Penawaran tidak ditemukan – pilih ulang penawaran.");
     if (quotation.customerId !== customerId) {
       throw new Error(
         `Penawaran ${quotation.documentNo} milik pelanggan lain; tidak bisa ditautkan ke perintah kerja pelanggan ini.`,
@@ -1801,7 +1801,7 @@ async function assertWorkOrderSubstituteInTx(
   });
   if (!relation) {
     throw new Error(
-      "Relasi substitusi aktif untuk pasangan ini tidak ditemukan — muat ulang saran (relasi mungkin baru dinonaktifkan)",
+      "Relasi substitusi aktif untuk pasangan ini tidak ditemukan – muat ulang saran (relasi mungkin baru dinonaktifkan)",
     );
   }
 
@@ -1821,14 +1821,14 @@ async function assertWorkOrderSubstituteInTx(
       throw new Error(`${label} tidak ditemukan atau sudah nonaktif`);
     }
     if (item.isService) {
-      throw new Error(`${label} adalah jasa — substitusi hanya antar item stok`);
+      throw new Error(`${label} adalah jasa – substitusi hanya antar item stok`);
     }
   }
   const originRow = origin as SubstituteItemGuardRow;
   const substituteRow = substitute as SubstituteItemGuardRow;
   if (originRow.unitOfMeasure !== substituteRow.unitOfMeasure) {
     throw new Error(
-      `Satuan dasar pengganti (${substituteRow.unitOfMeasure}) berbeda dari barang asal (${originRow.unitOfMeasure}) — substitusi lintas satuan dasar belum didukung`,
+      `Satuan dasar pengganti (${substituteRow.unitOfMeasure}) berbeda dari barang asal (${originRow.unitOfMeasure}) – substitusi lintas satuan dasar belum didukung`,
     );
   }
 
@@ -1934,7 +1934,7 @@ export async function reviseWorkOrderItems(input: {
     });
     if (wo.status !== "in_progress") {
       throw new Error(
-        `Item hanya bisa direvisi saat Perintah Kerja berjalan. Status saat ini '${wo.status}' — gunakan ubah biasa untuk draft/pending.`,
+        `Item hanya bisa direvisi saat Perintah Kerja berjalan. Status saat ini '${wo.status}' – gunakan ubah biasa untuk draft/pending.`,
       );
     }
 
@@ -1959,7 +1959,7 @@ export async function reviseWorkOrderItems(input: {
         success: false,
         error:
           v.newEndDate !== undefined
-            ? "Estimasi selesai tidak berubah — tidak ada yang digeser"
+            ? "Estimasi selesai tidak berubah – tidak ada yang digeser"
             : "Pilih item yang diganti atau tambahkan item baru",
       };
     }
@@ -2018,7 +2018,7 @@ export async function reviseWorkOrderItems(input: {
         });
         if (issued.length > 0) {
           throw new Error(
-            "Sebagian item sudah dikeluarkan lewat Pengeluaran Material selesai — kembalikan stoknya lewat jalur retur/pengeluaran material, bukan revisi item.",
+            "Sebagian item sudah dikeluarkan lewat Pengeluaran Material selesai – kembalikan stoknya lewat jalur retur/pengeluaran material, bukan revisi item.",
           );
         }
 
@@ -3201,7 +3201,7 @@ export async function saveStocktakeCounts(id: number, formData: FormData) {
       const uncounted = lines.filter((l) => l.count1 == null).length;
       if (uncounted > 0) {
         throw new Error(
-          `Masih ada ${uncounted} baris yang belum dihitung — lengkapi seluruh hitungan sebelum sesi masuk tahap review.`,
+          `Masih ada ${uncounted} baris yang belum dihitung – lengkapi seluruh hitungan sebelum sesi masuk tahap review.`,
         );
       }
       const pending = finals.filter((f) => f.needsRecount);
@@ -3227,7 +3227,7 @@ export async function approveStocktakeSession(id: number) {
     await assertWarehouseIdInScope(user, session.warehouseId);
     if (session.status !== "review") throw new Error("Hanya sesi tahap review yang bisa disetujui");
     if (session.countedBy != null && Number(session.countedBy) === Number(user.id)) {
-      throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
+      throw new Error("Penyetuju harus independen – pencacah tidak boleh menyetujui sesi sendiri");
     }
     await prisma.$transaction(async (tx) => {
       // Kunci baris sesi + nilai ulang status/independensi dari bacaan
@@ -3243,7 +3243,7 @@ export async function approveStocktakeSession(id: number) {
         throw new Error("Hanya sesi tahap review yang bisa disetujui");
       }
       if (lockedSession.countedBy != null && Number(lockedSession.countedBy) === Number(user.id)) {
-        throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
+        throw new Error("Penyetuju harus independen – pencacah tidak boleh menyetujui sesi sendiri");
       }
       // Sesi review warisan bisa masih punya baris belum dihitung (masuk
       // review sebelum gerbang kelengkapan save ada) — jangan setujui.
@@ -3252,7 +3252,7 @@ export async function approveStocktakeSession(id: number) {
       });
       if (uncounted > 0) {
         throw new Error(
-          `Masih ada ${uncounted} baris yang belum dihitung — sesi tidak bisa disetujui sebelum seluruh baris dihitung.`,
+          `Masih ada ${uncounted} baris yang belum dihitung – sesi tidak bisa disetujui sebelum seluruh baris dihitung.`,
         );
       }
       await tx.stocktakeSession.update({
@@ -3316,7 +3316,7 @@ export async function postStocktakeSession(id: number) {
       const uncounted = session.lines.filter((l) => l.count1 == null).length;
       if (uncounted > 0) {
         throw new Error(
-          `Masih ada ${uncounted} baris yang belum dihitung — sesi tidak bisa diposting sebelum seluruh baris dihitung.`,
+          `Masih ada ${uncounted} baris yang belum dihitung – sesi tidak bisa diposting sebelum seluruh baris dihitung.`,
         );
       }
       const differing = finals.filter((f) => f.variance !== 0);

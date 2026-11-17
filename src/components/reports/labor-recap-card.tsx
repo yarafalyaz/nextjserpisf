@@ -91,7 +91,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
             </DetailTableHead>
             <DetailTableBody>
               <DetailTableRow key="unattributed">
-                <DetailTableTd>Tanpa teknisi — jangan ditebak</DetailTableTd>
+                <DetailTableTd>Tanpa teknisi, jangan ditebak</DetailTableTd>
                 <DetailTableTd align="right">{formatNumber(recap.unattributed.lineCount)}</DetailTableTd>
                 <DetailTableTd align="right">
                   {formatNumber(recap.unattributed.laborHours, 2)}
@@ -110,7 +110,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
             Tanggal kerja belum terbukti
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Baris ini di luar total periode — tanggal kerjanya tidak terbukti dari timesheet.
+            Baris ini di luar total periode, tanggal kerjanya tidak terbukti dari timesheet.
           </p>
           <DetailTable data-report-table="Tanggal Kerja Belum Terbukti">
             <DetailTableHead>

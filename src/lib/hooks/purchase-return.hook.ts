@@ -113,7 +113,7 @@ export async function onPurchaseReturnProcessed(
     });
     if (existingMoves) {
       console.info(
-        `[purchase-return.hook] retur beli #${returnId} sudah diproses — pergerakan stok dilewati`
+        `[purchase-return.hook] retur beli #${returnId} sudah diproses, pergerakan stok dilewati`
       );
       return;
     }
@@ -124,7 +124,7 @@ export async function onPurchaseReturnProcessed(
     // Guard: already returned
     if (purchaseReturn.status === "returned") {
       console.info(
-        `[purchase-return.hook] retur beli #${returnId} sudah berstatus returned — pemrosesan dilewati`
+        `[purchase-return.hook] retur beli #${returnId} sudah berstatus returned, pemrosesan dilewati`
       );
       return;
     }
@@ -300,7 +300,7 @@ export async function onPurchaseReturnProcessed(
           });
           if (!cap.allowed) {
             throw new Error(
-              `Potongan retur beli kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi tagihan asal (DPP ${sourceDpp} / PPN ${source.taxAmount}) — retur ditolak`,
+              `Potongan retur beli kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi tagihan asal (DPP ${sourceDpp} / PPN ${source.taxAmount}), retur ditolak`,
             );
           }
           for (const line of lines) {

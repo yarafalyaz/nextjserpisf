@@ -78,6 +78,8 @@ export function Button({
 }: ButtonProps) {
   const shadVariant = variantMap[variant] ?? "secondary"
   const shadSize = isIconOnly ? "icon" : (sizeMap[size] ?? "default")
+  // `size="sm"` bawaan shadcn 32 px: di layar sentuh dinaikkan ke 44 px, desktop tetap 32 px.
+  const touchClass = !isIconOnly && size === "sm" ? "min-h-11 sm:min-h-8" : ""
 
   const variantClass = variant === "success"
     ? "bg-success text-success-foreground hover:bg-success/90 focus-visible:ring-success/20 dark:bg-success/60 dark:focus-visible:ring-success/40"
@@ -89,7 +91,7 @@ export function Button({
         asChild
         variant={shadVariant}
         size={shadSize}
-        className={cn(variantClass, className)}
+        className={cn(variantClass, touchClass, className)}
         id={id}
         {...rest}
       >
@@ -103,7 +105,7 @@ export function Button({
       type={type}
       variant={shadVariant}
       size={shadSize}
-      className={cn(variantClass, className)}
+      className={cn(variantClass, touchClass, className)}
       id={id}
       disabled={isDisabled || isPending}
       onClick={(e) => {

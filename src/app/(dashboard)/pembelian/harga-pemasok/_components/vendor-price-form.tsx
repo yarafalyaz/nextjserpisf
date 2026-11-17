@@ -173,7 +173,7 @@ export function VendorPriceForm({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
         <p className="text-xs text-muted-foreground">
-          Data rujukan — dokumen pembelian belum otomatis memakai harga ini.
+          Data rujukan, dokumen pembelian belum otomatis memakai harga ini.
         </p>
         <div className="flex gap-3">
           <Button type="button" onPress={() => router.back()} isDisabled={isPending}>

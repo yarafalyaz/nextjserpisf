@@ -42,7 +42,7 @@ export default async function CreateMyLoanRequestPage() {
       </div>
       <p className="text-sm text-muted-foreground">
         Pengajuan dibuat atas nama Anda dan berstatus menunggu persetujuan. Persetujuan
-        dilakukan oleh SDM — Anda tidak dapat mengubah atau menghapus pengajuan dari halaman ini.
+        dilakukan oleh SDM, Anda tidak dapat mengubah atau menghapus pengajuan dari halaman ini.
       </p>
       <EmployeeLoanForm employees={[employee]} redirectTo="/sdm/pinjaman-saya" />
     </div>

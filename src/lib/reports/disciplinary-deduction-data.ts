@@ -86,7 +86,7 @@ function toRow(r: DecisionDbRow, canViewAmount: boolean): DisciplinaryDeductionD
     kind: r.kind,
     amount: canViewAmount ? Number(r.amount) : null,
     compensationAccountLabel: r.compensationAccount
-      ? `${r.compensationAccount.code} — ${r.compensationAccount.name}`
+      ? `${r.compensationAccount.code} (${r.compensationAccount.name})`
       : null,
     suspensionKind: r.suspensionKind,
     suspensionPayTreatment: r.suspensionPayTreatment,

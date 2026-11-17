@@ -41,7 +41,7 @@ import { safeAdd } from "@/lib/utils/math"
 
 /** Notice wajib verbatim BR-PH-05 — UI menempel apa adanya. */
 export const SALES_PRICE_HISTORY_NOTICE_TEXT =
-  "Harga transaksi lampau — bukan harga jual saat ini; harga berlaku mengikuti daftar harga/master saat penawaran dibuat."
+  "Harga transaksi lampau – bukan harga jual saat ini; harga berlaku mengikuti daftar harga/master saat penawaran dibuat."
 
 /** Label sumber harga tak tercatat verbatim BR-PH-03 — UI menempel apa adanya. */
 export const SALES_PRICE_HISTORY_UNKNOWN_SOURCE_LABEL = "Sumber harga tidak tercatat"

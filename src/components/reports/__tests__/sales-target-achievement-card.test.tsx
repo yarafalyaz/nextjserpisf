@@ -102,7 +102,7 @@ describe("SalesTargetAchievementCard F-2026-10-22-088-S", () => {
     const text = container.textContent ?? ""
     expect(text).toContain(SALES_TARGET_NOTICE)
     expect(text).toContain(
-      "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur.",
+      "Laporan informatif dari snapshot penjual di faktur lunas – bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur.",
     )
     expect(
       container.querySelector("[data-report-narration]")?.getAttribute("data-report-narration"),
@@ -267,7 +267,7 @@ describe("SalesTargetAchievementCard F-2026-10-22-088-S", () => {
   it("periode tidak utuh: lencana verbatim + persen/selisih kosong bukan 0%", () => {
     const { container, root } = renderCard(<SalesTargetAchievementCard report={reportExample()} />)
     const text = container.textContent ?? ""
-    expect(text).toContain("Periode target tidak utuh — persen tidak dihitung")
+    expect(text).toContain("Periode target tidak utuh – persen tidak dihitung")
     expect(text).toContain("Target diubah 05/10/2026")
     // Budi persen null -> sel persennya kosong; persen tampil hanya Sari + total perusahaan.
     const percents = [...container.querySelectorAll("td")].map((td) => td.textContent ?? "").filter((t) => t.includes("%"))
@@ -461,7 +461,7 @@ describe("SalesTargetReconciliationCard F-2026-10-24-131-V", () => {
       <SalesTargetReconciliationCard reconciliation={unmapped} report={report} />,
     )
     const text = container.textContent ?? ""
-    expect(text).toContain("Belum terukur — akun Retur Penjualan belum dipetakan.")
+    expect(text).toContain("Belum terukur – akun Retur Penjualan belum dipetakan.")
     expect(text).not.toContain("Kaki Retur Penjualan jurnal retur POSTED: Rp 0")
     expect(text).not.toContain("Temuan rekonsiliasi")
     unmountCard(root)

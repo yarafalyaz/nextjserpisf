@@ -42,9 +42,9 @@ export function assetUseStatusDisplay(
 
 export const CRON_SKIP_REASON_LABELS: Record<CronSkipReason, string> = {
   disposed: "Sudah dilepas",
-  "held-for-sale": "Dimiliki untuk Dijual — penyusutan komersial berhenti, fiskal tetap berjalan",
-  "at-residual": "Nilai buku sudah di nilai residu — tersusutkan penuh, masih dipakai",
-  "unregistered-status": "Status tidak terdaftar — temuan bersih-data",
+  "held-for-sale": "Dimiliki untuk Dijual – penyusutan komersial berhenti, fiskal tetap berjalan",
+  "at-residual": "Nilai buku sudah di nilai residu – tersusutkan penuh, masih dipakai",
+  "unregistered-status": "Status tidak terdaftar – temuan bersih-data",
 }
 
 /** Nama fakta held-for-sale (a)-(e) ala Putusan 3 untuk daftar yang hilang. */

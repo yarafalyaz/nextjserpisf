@@ -425,7 +425,7 @@ export async function loadSalesAnalytics(period: Period, dimension: SalesDimensi
       const item = it.itemId != null ? itemById.get(it.itemId) : undefined
       return {
         itemKey: it.itemId != null ? String(it.itemId) : null,
-        itemLabel: item ? `${item.sku} — ${item.name}` : (it.description ?? "(tanpa barang)"),
+        itemLabel: item ? `${item.sku} - ${item.name}` : (it.description ?? "(tanpa barang)"),
         brandName: item?.brand?.name ?? null,
         customerId: inv.customer.id,
         customerName: inv.customer.name,

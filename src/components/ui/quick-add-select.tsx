@@ -266,7 +266,7 @@ export function QuickAddSelect({
       >
         {/*
           Tinggi dibatasi `dvh` (bukan `vh`) supaya ikut mengecil saat keyboard HP
-          muncul, dan hanya AREA ISI yang di-scroll — tombol Simpan selalu menempel
+          muncul, dan hanya AREA ISI yang di-scroll, tombol Simpan selalu menempel
           di bawah dialog, jadi tidak perlu men-scroll untuk menyimpan.
         */}
         <DialogContent

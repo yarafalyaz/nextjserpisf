@@ -73,8 +73,8 @@ describe("WhatsappStatementSection F-2026-10-25-038-F1", () => {
   it("AC-SW-F4: riwayat baca-saja terbaru-dulu, waktu WIB + nama staf apa adanya", () => {
     expectTrailList(section({ whatsappTrail: [...STATEMENT_TRAIL] }), {
       listLabel: "Riwayat tautan WhatsApp dibuka",
-      first: "Tautan WhatsApp dibuka — 21 Oktober 2026 pukul 10.00 WIB oleh Sari",
-      second: "Tautan WhatsApp dibuka — 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna",
+      first: "Tautan WhatsApp dibuka: 21 Oktober 2026 pukul 10.00 WIB oleh Sari",
+      second: "Tautan WhatsApp dibuka: 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna",
       forbidden: FORBIDDEN,
     })
   })

@@ -30,7 +30,7 @@ export default async function CreateReimbursementClaimPage() {
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ajukan Klaim Reimbursement</h1>
       </div>
       <p className="text-sm text-muted-foreground">
-        Klaim diajukan atas nama Anda. Akun beban ditetapkan oleh keuangan saat verifikasi —
+        Klaim diajukan atas nama Anda. Akun beban ditetapkan oleh keuangan saat verifikasi;
         Anda tidak perlu memilih akun.
       </p>
       <ReimbursementClaimForm categories={categories} projects={projects} />

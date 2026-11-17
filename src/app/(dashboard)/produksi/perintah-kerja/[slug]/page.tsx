@@ -362,7 +362,7 @@ export default async function WorkOrderDetailPage({
             </CanCreate>
             {/* WO -> Perintah Produksi: satu-satunya jalur yang mengisi
                 `ProductionOrder.workOrderId` (form manual tak punya input WO).
-                Selalu tampil — satu WO boleh punya beberapa perintah produksi
+                Selalu tampil, satu WO boleh punya beberapa perintah produksi
                 (produksi parsial), jadi turunannya bukan tunggal. */}
             <CanCreate permission="create_production_orders">
               <Button
@@ -488,14 +488,14 @@ export default async function WorkOrderDetailPage({
             value={
               vehicleIntake ? (
                 <Link href={entityHref("/produksi/qc/inspeksi", vehicleIntake)} className="hover:underline">
-                  {vehicleIntake.documentNo} — tercatat
+                  {vehicleIntake.documentNo}, tercatat
                 </Link>
               ) : canVerifyPhoto ? (
                 <Link
                   href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
                   className="hover:underline"
                 >
-                  Belum tercatat — buat inspeksi masuk
+                  Belum tercatat, buat inspeksi masuk
                 </Link>
               ) : (
                 <span className="text-muted-foreground">Belum tercatat</span>
@@ -509,14 +509,14 @@ export default async function WorkOrderDetailPage({
             value={
               vehicleHandover ? (
                 <Link href={entityHref("/produksi/qc/inspeksi", vehicleHandover)} className="hover:underline">
-                  {vehicleHandover.documentNo} — tercatat
+                  {vehicleHandover.documentNo}, tercatat
                 </Link>
               ) : canVerifyPhoto ? (
                 <Link
                   href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_handover`}
                   className="hover:underline"
                 >
-                  Belum tercatat — buat inspeksi serah terima
+                  Belum tercatat, buat inspeksi serah terima
                 </Link>
               ) : (
                 <span className="text-muted-foreground">Belum tercatat</span>
@@ -707,7 +707,7 @@ export default async function WorkOrderDetailPage({
           {activeMi && (
             <span id="wo-material-issue-active-hint" role="note" className="text-xs text-muted-foreground">
               Pengeluaran material aktif {activeMi.documentNo} berstatus{" "}
-              {statusLabel(activeMi.status)} — selesaikan atau batalkan dahulu
+              {statusLabel(activeMi.status)}, selesaikan atau batalkan dahulu
               sebelum membuat pengeluaran baru.
             </span>
           )}

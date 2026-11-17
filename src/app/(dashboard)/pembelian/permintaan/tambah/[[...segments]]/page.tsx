@@ -63,7 +63,7 @@ export default async function CreatePurchaseRequestPage({
       </div>
       {initialItems.length > 0 ? (
         <p className="text-sm text-muted-foreground">
-          {initialItems.length} barang terisi dari laporan stok minimum — periksa
+          {initialItems.length} barang terisi dari laporan stok minimum, periksa
           dan ubah jumlahnya sebelum menyimpan.
         </p>
       ) : null}

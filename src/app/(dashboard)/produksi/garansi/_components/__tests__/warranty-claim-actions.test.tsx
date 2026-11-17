@@ -40,7 +40,7 @@ const claim = (over: Partial<WarrantyClaimFacts> = {}): WarrantyClaimFacts => ({
     withinPeriod: true,
     withinMileage: true,
     serialMatches: null,
-    notes: ["Odometer tidak tercatat/terbaca — putuskan manual berdasarkan bukti lain."],
+    notes: ["Odometer tidak tercatat/terbaca, putuskan manual berdasarkan bukti lain."],
   },
   decisionByName: null,
   decisionAt: null,
@@ -71,7 +71,7 @@ describe("WarrantyClaimActions — fakta bukan keputusan, gating terpisah", () =
     )
     expect(container.textContent).toContain("bukan keputusan otomatis")
     expect(container.textContent).toContain(
-      "Odometer tidak tercatat/terbaca — putuskan manual berdasarkan bukti lain.",
+      "Odometer tidak tercatat/terbaca, putuskan manual berdasarkan bukti lain.",
     )
     expect(container.textContent).toContain("Syarat snapshot verbatim saat pemasangan.")
     act(() => root.unmount())

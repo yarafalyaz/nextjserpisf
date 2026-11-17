@@ -29,7 +29,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
     <ReportCardShell
       label={report.label}
       title={`Margin Job Kendaraan (${rows.length} kendaraan)`}
-      summary={<>{report.periodCaption} — label kontrak: {report.label}</>}
+      summary={<>{report.periodCaption}, label kontrak: {report.label}</>}
       isEmpty={rows.length === 0}
       emptyText="Tidak ada margin job kendaraan dalam periode ini"
     >
@@ -123,7 +123,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
 
       {totals.unbilledMemo > 0 ? (
         <p className="mt-4 text-xs text-muted-foreground">
-          Total {report.unbilledLabel}: {currency(totals.unbilledMemo)} — memo invoice yang belum
+          Total {report.unbilledLabel}: {currency(totals.unbilledMemo)}, memo invoice yang belum
           ditagih; bukan pendapatan, tidak masuk TOTAL di atas dan tidak mempengaruhi margin job
           kendaraan.
         </p>

@@ -91,7 +91,7 @@ describe("getWorkOrderReservations", () => {
       {
         itemName: "Filter",
         remainingQty: 2,
-        statusLabel: "Belum direservasi — gudang belum ditentukan",
+        statusLabel: "Belum direservasi – gudang belum ditentukan",
       },
     ])
   })

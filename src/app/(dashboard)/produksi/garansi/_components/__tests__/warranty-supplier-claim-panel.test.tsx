@@ -209,7 +209,7 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
         canApprove={true}
       />,
     )
-    expect(container.textContent).toContain("Tutup — tanpa recovery")
+    expect(container.textContent).toContain("Tutup – tanpa recovery")
     expect(container.querySelector("[aria-label='Formulir status klaim supplier']")).toBeNull()
     act(() => root.unmount())
   })

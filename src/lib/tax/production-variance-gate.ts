@@ -27,12 +27,12 @@ export interface DispositionGate {
 export function assertDispositionAllowed(gate: DispositionGate): { accountId: number } {
   if (!gate.standardCostingEnabled) {
     throw new Error(
-      "Disposisi varians produksi MATI (mode standard-costing tidak aktif) — variance order adalah angka analitis, bukan saldo yang dijurnal.",
+      "Disposisi varians produksi MATI (mode standard-costing tidak aktif) – variance order adalah angka analitis, bukan saldo yang dijurnal.",
     )
   }
   if (gate.productionVarianceAccountId == null || !(gate.productionVarianceAccountId > 0)) {
     throw new Error(
-      "Akun selisih biaya produksi belum dikonfigurasi — disposisi varians ditolak (tanpa fallback ke beban lain).",
+      "Akun selisih biaya produksi belum dikonfigurasi – disposisi varians ditolak (tanpa fallback ke beban lain).",
     )
   }
   return { accountId: gate.productionVarianceAccountId }

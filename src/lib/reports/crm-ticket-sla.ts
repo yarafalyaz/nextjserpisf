@@ -38,7 +38,7 @@
 
 import { wibDateKeyParts, wibPartsKey } from "@/lib/utils/format"
 
-export const CRM_TICKET_SLA_EMPTY_TEXT = "Tidak ada tiket lewat SLA — semua tiket aktif masih dalam target"
+export const CRM_TICKET_SLA_EMPTY_TEXT = "Tidak ada tiket lewat SLA – semua tiket aktif masih dalam target"
 
 export const CRM_TICKET_SLA_NOTICE_TEXT =
   "Keadaan SLA dihitung dari jam kerja Senin–Jumat 08:00–17:00 WIB (di luar tanggal libur) sejak tiket dibuat. Daftar ini baca-saja; tindak lanjut lewat detail tiket."

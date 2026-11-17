@@ -151,7 +151,7 @@ export default async function CreateDeliveryOrderPage({
           <AlertDescription>
             Surat jalan hanya bisa dibuat dari Pesanan Penjualan berstatus{" "}
             <strong>Disetujui</strong>, <strong>Dikonfirmasi</strong>, <strong>Diproses</strong>, atau{" "}
-            <strong>Selesai</strong>. Pesanan yang baru dibuat selalu berstatus konsep — setujui dulu lewat tombol{} 
+            <strong>Selesai</strong>. Pesanan yang baru dibuat selalu berstatus konsep, setujui dulu lewat tombol{} 
             <strong>Setujui</strong> di halaman detail pesanan.
           </AlertDescription>
         </Alert>

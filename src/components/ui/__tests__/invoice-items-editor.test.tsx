@@ -161,7 +161,7 @@ describe("InvoiceItemsEditor", () => {
       )
     })
 
-    expect(container.textContent).toContain("Harga tingkat >= 10 — Daftar Harga")
+    expect(container.textContent).toContain("Harga tingkat >= 10 , Daftar Harga")
     // Baris tanpa priceSource (lama/konversi/edit) tidak boleh mengklaim sumber.
     expect(container.textContent).not.toContain("Harga daftar")
     expect(container.textContent).not.toContain("Harga master")

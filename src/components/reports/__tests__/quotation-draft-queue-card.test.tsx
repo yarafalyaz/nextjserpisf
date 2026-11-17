@@ -105,7 +105,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
     ]
     headers.forEach((header) => expect(text).toContain(header))
     expect(text).toContain("Draf Penawaran Basi")
-    expect(text).toContain("Lewat Masa Berlaku — Belum Terkirim")
+    expect(text).toContain("Lewat Masa Berlaku – Belum Terkirim")
     expect(text).toContain("Masa Berlaku Menipis")
     expect(text).toContain("Tanpa Masa Berlaku")
     expect(text).toContain("4 draf penawaran belum terkirim")

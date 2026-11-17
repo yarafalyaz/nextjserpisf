@@ -75,7 +75,7 @@ export default async function RemnantPage() {
                 {remnants.map((r) => (
                   <DetailTableRow key={r.id}>
                     <DetailTableTd>{r.documentNo}</DetailTableTd>
-                    <DetailTableTd>{r.item.sku} — {r.item.name}</DetailTableTd>
+                    <DetailTableTd>{r.item.sku} – {r.item.name}</DetailTableTd>
                     <DetailTableTd>{String(r.qty)} {r.uom ?? ""}</DetailTableTd>
                     <DetailTableTd>{r.dimensions ?? "—"}</DetailTableTd>
                     <DetailTableTd>{r.measuredSize != null ? String(r.measuredSize) : "—"}</DetailTableTd>

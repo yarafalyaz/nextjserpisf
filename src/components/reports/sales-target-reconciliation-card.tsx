@@ -122,7 +122,7 @@ export function SalesTargetReconciliationCard({
         Kaki Retur Penjualan jurnal retur POSTED:{" "}
         {reconciliation.totals.postedJournalReturnAmount !== null
           ? formatCurrencyExact(reconciliation.totals.postedJournalReturnAmount)
-          : "Belum terukur — akun Retur Penjualan belum dipetakan."}
+          : "Belum terukur – akun Retur Penjualan belum dipetakan."}
         {reconciliation.totals.journalDifference !== null
           ? ` · Selisih terhadap retur read-model: ${formatCurrencyExact(reconciliation.totals.journalDifference)}`
           : ""}

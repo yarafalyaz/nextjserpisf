@@ -20,7 +20,7 @@ describe("WorkOrderMaterialNeedsCard F-2026-10-20-19", () => {
     expect(container.querySelector('[aria-label="Kebutuhan Material"]')).not.toBeNull()
     expect(text).toContain("Busi Iridium")
     expect(text).toContain("Kekurangan stok")
-    expect(text).toContain("Jasa — terpenuhi")
+    expect(text).toContain("Jasa – terpenuhi")
     expect(text).toContain("1 baris kekurangan stok")
     unmountCard(root)
   })
@@ -51,7 +51,7 @@ describe("WorkOrderMaterialNeedsCard F-2026-10-20-19", () => {
     const { container, root } = renderCard(<WorkOrderMaterialNeedsCard needs={needs} />)
     const text = container.textContent ?? ""
     expect(text).toContain("Stok gudang relevan")
-    expect(text).toContain("Belum keluar — kurang di gudang relevan")
+    expect(text).toContain("Belum keluar – kurang di gudang relevan")
     expect(text).toContain("1 baris kekurangan di gudang relevan")
     expect(text).not.toContain("Kekurangan stok")
     unmountCard(root)

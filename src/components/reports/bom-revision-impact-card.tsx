@@ -66,7 +66,7 @@ export function BomRevisionImpactCard({
                   <DetailTableTd>
                     {locked ? (
                       <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-                        Sudah ter-issue — terkunci
+                        Sudah ter-issue, terkunci
                       </span>
                     ) : (
                       <span className="text-muted-foreground">Belum ada material keluar</span>

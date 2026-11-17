@@ -45,7 +45,7 @@ describe("CustomerForm — identitas pajak F-2026-10-25-004-S", () => {
       slug: "budi-baru",
       duplicateWarning: null,
       taxWarnings: [
-        "NPWP 15 digit — minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit",
+        "NPWP 15 digit – minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit",
       ],
     })
     const container = document.createElement("div")
@@ -54,7 +54,7 @@ describe("CustomerForm — identitas pajak F-2026-10-25-004-S", () => {
     await submitFilledForm(container)
     expect(container.textContent).toContain("Peringatan identitas pajak")
     expect(container.textContent).toContain(
-      "NPWP 15 digit — minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit",
+      "NPWP 15 digit – minta NPWP 16 digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format 16 digit",
     )
     unmount(root, container)
   })

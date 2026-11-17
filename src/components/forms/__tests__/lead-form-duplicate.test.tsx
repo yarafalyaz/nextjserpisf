@@ -23,7 +23,7 @@ vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }
 
 const warning = {
   title: "Kemungkinan lead duplikat",
-  body: "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu — membuat ganda membagi tindak lanjut antar sales.",
+  body: "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu, membuat ganda membagi tindak lanjut antar sales.",
   candidates: [
     {
       id: 7,
@@ -130,14 +130,14 @@ describe("LeadForm — panel duplikat DUP-F1", () => {
 
     expect(container.textContent).toContain("Kemungkinan lead duplikat")
     expect(container.textContent).toContain(
-      "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu — membuat ganda membagi tindak lanjut antar sales.",
+      "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu, membuat ganda membagi tindak lanjut antar sales.",
     )
     expect(container.textContent).toContain("LEAD-0007 — Budi Santoso (PT Maju)")
     expect(container.textContent).toContain("Status: Baru · Pemilik: Sari Sales · Nomor telepon sama")
     expect(container.textContent).toContain("••90")
     expect(container.textContent).toContain("•••@maju.id")
     expect(container.textContent).toContain("Sudah dikonversi menjadi pelanggan")
-    expect(container.textContent).toContain("Lead lama berstatus lost — bukan duplikat aktif")
+    expect(container.textContent).toContain("Lead lama berstatus lost – bukan duplikat aktif")
     expect(container.textContent).toContain("Alasan tetap membuat lead baru (wajib, tercatat)")
 
     const links = Array.from(container.querySelectorAll("a")).filter(

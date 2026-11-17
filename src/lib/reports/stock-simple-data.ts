@@ -285,7 +285,7 @@ export async function loadStockReconciliation(
       kind: "notice",
       text: scoped
         ? "Tidak ada selisih pada item yang tampil dalam cakupan gudang."
-        : "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO.",
+        : "Semua item seimbang – jumlah induk sama dengan total lapisan FIFO.",
     })
   }
   if (scoped) {

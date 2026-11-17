@@ -38,7 +38,7 @@ export function LeadFunnelCard({
     >
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
         <h2 className="text-[0.9375rem] font-semibold text-foreground">
-          Corong Prospek — Posisi saat ini
+          Corong Prospek: Posisi saat ini
         </h2>
         <p className="text-xs text-muted-foreground">
           {formatNumber(position.totalLeads)} prospek

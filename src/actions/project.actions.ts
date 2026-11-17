@@ -555,7 +555,7 @@ export async function updateProjectStageProgress(
   // evaluateWorkOrderOperationTransition. Tanpa ini lompatan tahap
   // tercatat tanpa jejak di ProjectStageProgress.
   if (targetStatus === "skipped" && !(notes ?? "").trim()) {
-    throw new Error("Tahap yang dilewati wajib diisi alasan (notes) — melewati tahap mengubah dasar hitung progres.")
+    throw new Error("Tahap yang dilewati wajib diisi alasan (notes) – melewati tahap mengubah dasar hitung progres.")
   }
 
   // ATOMICITY: the stage status flip + the cascading project/WO sync must
@@ -1239,7 +1239,7 @@ export async function addProjectLog(projectId: number, formData: FormData) {
 const CONTRACT_QUOTATION_STATUSES = ["accepted", "approved", "converted"] as const
 
 const LOCKED_BUDGET_ERROR =
-  "Anggaran proyek ini sudah terkunci — perubahan hanya dapat dilakukan lewat revisi RAB yang disetujui."
+  "Anggaran proyek ini sudah terkunci – perubahan hanya dapat dilakukan lewat revisi RAB yang disetujui."
 
 type BudgetItemData = {
   itemId?: number
@@ -1330,7 +1330,7 @@ function assertBudgetUnlocked(project: { budgetLockedAt: Date | null; status?: s
   // tidak boleh mengubah angka final/margin tanpa jejak. Proyek yang tahapnya
   // dibuka lagi tersinkron keluar dari completed dan bisa diedit kembali.
   if (project.status === "completed") {
-    throw new Error("Proyek sudah selesai (completed) — RAB dan nilai kontrak tidak dapat diubah.")
+    throw new Error("Proyek sudah selesai (completed) – RAB dan nilai kontrak tidak dapat diubah.")
   }
 }
 
@@ -1382,7 +1382,7 @@ function parseRevisionPayload(raw: string): RevisionPayload {
       !isProjectBudgetCategory(data.category)
     ) {
       throw new Error(
-        `Perubahan revisi #${index + 1}: kategori tidak dikenal — pakai ${PROJECT_BUDGET_CATEGORIES.join("/")}.`,
+        `Perubahan revisi #${index + 1}: kategori tidak dikenal – pakai ${PROJECT_BUDGET_CATEGORIES.join("/")}.`,
       )
     }
     if (change.type === "create") {
@@ -1740,7 +1740,7 @@ export async function proposeProjectBudgetRevision(
       const project = await loadBudgetProject(tx, projectId)
       if (project.budgetLockedAt === null) {
         throw new Error(
-          "Anggaran proyek belum terkunci — ubah baris RAB langsung, revisi hanya untuk anggaran terkunci.",
+          "Anggaran proyek belum terkunci – ubah baris RAB langsung, revisi hanya untuk anggaran terkunci.",
         )
       }
       // Satu usulan terbuka per proyek: UI hanya menampilkan yang terbaru,
@@ -1752,7 +1752,7 @@ export async function proposeProjectBudgetRevision(
       const open = await findOpenRevisionProposal(tx, projectId)
       if (open) {
         throw new Error(
-          "Sudah ada usulan revisi RAB yang masih terbuka pada proyek ini — putuskan usulan tersebut terlebih dahulu sebelum mengajukan usulan baru.",
+          "Sudah ada usulan revisi RAB yang masih terbuka pada proyek ini – putuskan usulan tersebut terlebih dahulu sebelum mengajukan usulan baru.",
         )
       }
       return tx.projectLog.create({
@@ -1829,7 +1829,7 @@ async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposa
   // menerapkan/menolak usulannya sendiri — kunci anggaran terkunci
   // kehilangan makna bila satu orang mengusulkan sekaligus memutus.
   if (deciderUserId != null && proposal.userId != null && Number(proposal.userId) === deciderUserId) {
-    throw new Error("Usulan revisi RAB tidak boleh diputuskan oleh pengusulnya sendiri (pemisahan tugas) — minta pengguna lain yang berizin manage_projects.")
+    throw new Error("Usulan revisi RAB tidak boleh diputuskan oleh pengusulnya sendiri (pemisahan tugas) – minta pengguna lain yang berizin manage_projects.")
   }
   return proposal
 }
@@ -1844,7 +1844,7 @@ export async function applyProjectBudgetRevision(projectId: number, proposalLogI
       if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
       const project = await loadBudgetProject(tx, projectId)
       if (project.budgetLockedAt === null) {
-        throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk diterapkan.")
+        throw new Error("Anggaran proyek belum terkunci – tidak ada revisi untuk diterapkan.")
       }
       const proposal = await loadOpenRevisionProposal(tx, projectId, proposalLogId, Number(user.id))
       const details = (proposal.details ?? {}) as Record<string, unknown>
@@ -2012,7 +2012,7 @@ export async function rejectProjectBudgetRevision(
       if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
       const project = await loadBudgetProject(tx, projectId)
       if (project.budgetLockedAt === null) {
-        throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk ditolak.")
+        throw new Error("Anggaran proyek belum terkunci – tidak ada revisi untuk ditolak.")
       }
       await loadOpenRevisionProposal(tx, projectId, proposalLogId, Number(user.id))
       await tx.projectLog.create({

@@ -39,7 +39,7 @@ export function AssetFiscalStatus(input: FiscalGroupInput & { fiscalMethod?: str
         {methodLine}
         <span className="text-xs text-muted-foreground">
           {resolution.reason === "unknown-group"
-            ? "Kelompok fiskal tidak dikenal — periksa master kategori."
+            ? "Kelompok fiskal tidak dikenal – periksa master kategori."
             : input.taxTypeListed === true
               ? "Jenis tercantum di PMK 72/2023 tetapi kelompok fiskal belum diisi."
               : "Status jenis harta (tercantum/tidak) belum dinyatakan di kategori."}

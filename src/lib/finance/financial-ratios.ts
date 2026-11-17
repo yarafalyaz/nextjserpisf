@@ -48,7 +48,7 @@ export interface FinancialRatiosResult {
   groups: { label: string; rows: RatioRow[] }[]
 }
 
-const DENOMINATOR_ZERO = "Penyebut nol — rasio tidak dapat dihitung."
+const DENOMINATOR_ZERO = "Penyebut nol – rasio tidak dapat dihitung."
 
 function ratio(
   key: string,

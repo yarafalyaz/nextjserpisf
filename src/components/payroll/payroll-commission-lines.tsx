@@ -51,7 +51,7 @@ export function PayrollCommissionLines({
       <h2 className="mb-1 text-base font-semibold text-foreground">Bayar Komisi</h2>
       <p className="mb-4 text-sm text-muted-foreground">
         Pilih utang komisi milik karyawan slip ini. Nominal terkunci dari pilihan
-        saat tambah — ubah dengan hapus lalu tambah ulang. Baris terkirim ke
+        saat tambah, ubah dengan hapus lalu tambah ulang. Baris terkirim ke
         subledger saat slip dibayar.
       </p>
 
@@ -114,7 +114,7 @@ export function PayrollCommissionLines({
               <option value="">Pilih utang...</option>
               {available.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.invoiceNo ?? `Faktur #${d.salesInvoiceId}`} — sisa {formatCurrencyExact(d.balance)}
+                  {d.invoiceNo ?? `Faktur #${d.salesInvoiceId}`}, sisa {formatCurrencyExact(d.balance)}
                 </option>
               ))}
             </select>
@@ -147,7 +147,7 @@ export function PayrollCommissionLines({
       ) : (
         lines.length > 0 && (
           <p className="mt-4 border-t border-default pt-4 text-sm text-muted-foreground">
-            Slip sudah bukan draf — baris komisi terkunci dan tidak dapat diubah.
+            Slip sudah bukan draf, baris komisi terkunci dan tidak dapat diubah.
           </p>
         )
       )}

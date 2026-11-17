@@ -227,7 +227,7 @@ async function taskLowStockAlert(): Promise<string> {
   if (warehouseLow.length > 0) {
     parts.push(`${warehouseLow.length} pasangan barang-gudang di bawah minimum efektif`)
   }
-  return `${parts.join(", ")} — notifikasi dikirim ke admin`
+  return `${parts.join(", ")} (notifikasi dikirim ke admin)`
 }
 
 // 3. Overdue Invoice Alert
@@ -282,7 +282,7 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
     dayStart
   )
 
-  return `${overdueCount} invoice overdue — notifikasi dikirim ke admin`
+  return `${overdueCount} invoice overdue – notifikasi dikirim ke admin`
 }
 
 // 4. Late Check-in Alert
@@ -339,7 +339,7 @@ async function taskLateCheckInAlert(): Promise<string> {
     await notificationService.notifyLateCheckInBatchIfNew(entries, adminIds, dayStart)
   }
 
-  return `${lateAttendances.length} karyawan telat — notifikasi dikirim ke admin`
+  return `${lateAttendances.length} karyawan telat – notifikasi dikirim ke admin`
 }
 
 // 5. Recover journals stuck in REVERSING

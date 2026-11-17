@@ -43,15 +43,15 @@ import { isEmployeeLoanStatus } from "@/lib/reports/employee-loan-channel"
 
 /** Label verbatim untuk UI (AC-LR46-F1 — UI menempel apa adanya). */
 export const EMPLOYEE_LOAN_RECAP_NOTICE =
-  "Rekap sisa pinjaman berjalan — menampilkan fakta pinjaman tersimpan; " +
+  "Rekap sisa pinjaman berjalan – menampilkan fakta pinjaman tersimpan; " +
   "bukan proyeksi potongan slip berikutnya dan bukan perkiraan tanggal lunas."
 export const EMPLOYEE_LOAN_RECAP_PENDING_LABEL = "Menunggu persetujuan"
 export const EMPLOYEE_LOAN_RECAP_NO_WEEKLY_LABEL = "Tanpa jadwal mingguan"
 export const EMPLOYEE_LOAN_RECAP_NO_DEPARTMENT_LABEL = "Tanpa departemen"
 export const EMPLOYEE_LOAN_RECAP_INACTIVE_LABEL =
-  "Karyawan nonaktif — sisa pinjaman tetap tertagih terpisah"
+  "Karyawan nonaktif – sisa pinjaman tetap tertagih terpisah"
 export const EMPLOYEE_LOAN_RECAP_NEGATIVE_LABEL =
-  "Sisa negatif — anomali data, tindak lanjuti HR"
+  "Sisa negatif – anomali data, tindak lanjuti HR"
 export const EMPLOYEE_LOAN_RECAP_UNKNOWN_STATUS_LABEL = "Status tidak dikenal"
 
 export interface EmployeeLoanRecapRowInput {

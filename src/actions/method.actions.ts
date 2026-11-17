@@ -45,7 +45,7 @@ interface MethodConfig {
 async function assertMethodCodeUnused(cfg: MethodConfig, code: string): Promise<string | null> {
   const used = await cfg.countCodeUsers(code)
   if (used === 0) return null
-  return `${cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"} masih dipakai ${used} dokumen — tidak dapat dihapus atau diganti kodenya. Nonaktifkan saja bila tidak dipakai lagi.`
+  return `${cfg.entity === "PaymentMethod" ? "Metode pembayaran" : "Metode pengiriman"} masih dipakai ${used} dokumen – tidak dapat dihapus atau diganti kodenya. Nonaktifkan saja bila tidak dipakai lagi.`
 }
 
 function normalizeMethodKey(value: string): string {
@@ -123,7 +123,7 @@ async function createMethod(cfg: MethodConfig, formData: FormData, skipPermissio
       return { kind: "created" as const, id: row.id, slug: row.slug as string | null }
     })
     if (result.kind === "inactive") {
-      return { success: false, error: `${label} "${result.name}" sudah ada tetapi nonaktif — aktifkan kembali dari master metode, jangan buat duplikat.` }
+      return { success: false, error: `${label} "${result.name}" sudah ada tetapi nonaktif – aktifkan kembali dari master metode, jangan buat duplikat.` }
     }
     if (result.kind === "reuse") {
       return { success: true, id: result.id, slug: result.slug ?? undefined }

@@ -175,14 +175,14 @@ export function buildSlowMovingStock(input: {
       kind: "notice",
       text:
         "Nilai sisa menurut metode barang (average dari harga pokok barang, fifo dari harga lapisan), sama dengan basis Valuasi Stok. " +
-        "Pergerakan keluar transfer antar gudang terhitung sebagai keluar — barang yang hanya " +
+        "Pergerakan keluar transfer antar gudang terhitung sebagai keluar – barang yang hanya " +
         "berpindah gudang tidak masuk daftar ini. Barang \"Belum pernah keluar\" belum pernah " +
         "mencatat pergerakan keluar posted sejak tercatat di sistem.",
     })
     if (neverMoved > 0) {
       rows.push({
         kind: "notice",
-        text: `${neverMoved} barang di antaranya belum pernah keluar sama sekali — periksa apakah memang stok pengaman atau salah beli.`,
+        text: `${neverMoved} barang di antaranya belum pernah keluar sama sekali – periksa apakah memang stok pengaman atau salah beli.`,
       })
     }
   }
@@ -190,7 +190,7 @@ export function buildSlowMovingStock(input: {
   if (units.size > 1) {
     rows.push({
       kind: "notice",
-      text: "Daftar memuat lebih dari satu satuan, jadi kolom sisa TIDAK dijumlahkan — hanya kolom nilai yang bertotal.",
+      text: "Daftar memuat lebih dari satu satuan, jadi kolom sisa TIDAK dijumlahkan – hanya kolom nilai yang bertotal.",
     })
   }
 

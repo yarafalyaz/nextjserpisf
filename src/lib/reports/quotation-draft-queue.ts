@@ -42,7 +42,7 @@ export type QuotationDraftStage = (typeof QUOTATION_DRAFT_STAGES)[number]
 
 /** Label tahap verbatim Q-QD-2 — UI menempel apa adanya. */
 export const QUOTATION_DRAFT_STAGE_LABELS: Record<QuotationDraftStage, string> = {
-  LEWAT_BELUM_TERKIRIM: "Lewat Masa Berlaku — Belum Terkirim",
+  LEWAT_BELUM_TERKIRIM: "Lewat Masa Berlaku – Belum Terkirim",
   MENIPIS: "Masa Berlaku Menipis",
   TERBUKA: "Terbuka",
   TANPA_BATAS: "Tanpa Masa Berlaku",

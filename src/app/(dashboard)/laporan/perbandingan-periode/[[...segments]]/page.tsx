@@ -160,7 +160,7 @@ export default async function PeriodComparisonPage({
               title={side.label}
               description={`${currentLabel} · pembanding ${previousLabel}`}
             >
-              <DetailTable data-report-table={`${title} — ${side.label}`}>
+              <DetailTable data-report-table={`${title} - ${side.label}`}>
                 <DetailTableHead>
                   <DetailTableTh>Kode</DetailTableTh>
                   <DetailTableTh>Nama Akun</DetailTableTh>

@@ -156,12 +156,12 @@ export function PayrollComponentLines({
       {lines.some((l) => l.source === "pkwt_compensation") && (
         <p className="mt-4 rounded-lg border border-default bg-surface-secondary/40 p-3 text-sm text-muted-foreground">
           Baris Kompensasi PKWT berasal dari peristiwa terbekukan dan dibayar
-          penuh (non-parsial) — nominal tidak dapat diubah atau dihapus dari slip.
+          penuh (non-parsial), nominal tidak dapat diubah atau dihapus dari slip.
         </p>
       )}
       {lines.some((l) => l.source === "commission") && (
         <p className="mt-4 rounded-lg border border-default bg-surface-secondary/40 p-3 text-sm text-muted-foreground">
-          Baris komisi dikelola di panel Bayar Komisi — ubah nominal dengan hapus
+          Baris komisi dikelola di panel Bayar Komisi, ubah nominal dengan hapus
           lalu tambah ulang; tanpa baris komisi slip tak membayar komisi.
         </p>
       )}

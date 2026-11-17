@@ -184,7 +184,7 @@ export async function loadProfitability(
       if (dimension === "barang") {
         if (line.itemId === null) return bucketFor("item-none", line.description ?? "Tanpa barang")
         const item = itemById.get(line.itemId)
-        return bucketFor(`item-${line.itemId}`, item ? `${item.sku} — ${item.name}` : (line.description ?? "Tanpa barang"))
+        return bucketFor(`item-${line.itemId}`, item ? `${item.sku} - ${item.name}` : (line.description ?? "Tanpa barang"))
       }
       return bucketFor(`invoice-${invoice.id}`, invoiceLabel)
     }

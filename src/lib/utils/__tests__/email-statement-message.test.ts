@@ -49,7 +49,7 @@ describe("buildStatementEmailMessage (F-2026-10-25-043-B1, Q-SE-4 verbatim 3 var
     const msg = buildStatementEmailMessage({ ...base, closingBalance: 0 });
     expect(msg).toBe(
       "Halo CV Uji,\n\nBerikut statement piutang Anda untuk Periode 1 Jan 2026 – 15 Okt 2026. " +
-        "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini. " +
+        "Saldo akhir periode: Rp 0 – tidak ada sisa piutang pada akhir periode ini. " +
         "Statement lengkap dapat kami sediakan/dicetak bila diperlukan.\n\nTerima kasih.",
     );
     expect(msg).not.toMatch(/tagihan|menunggak|denda|segera lunasi|terkirim|dibaca/i);

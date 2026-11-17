@@ -195,7 +195,7 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
                 )}
                 {quotaReady && !quota!.eligible && (
                   <span>
-                    Karyawan ini belum genap 1 tahun masa kerja — belum berhak cuti tahunan berbayar.
+                    Karyawan ini belum genap 1 tahun masa kerja, belum berhak cuti tahunan berbayar.
                   </span>
                 )}
                 {quotaReady && quota!.eligible && (

@@ -87,7 +87,7 @@ export function DisciplinaryDeductionRecordContext({
     >
       <h2 className="text-[0.9375rem] font-semibold text-foreground">Keputusan Potongan Terkait</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Dokumen keputusan berikut menautkan rekod ini sebagai konteks saja — surat peringatan tidak memicu
+        Dokumen keputusan berikut menautkan rekod ini sebagai konteks saja, surat peringatan tidak memicu
         potongan. Snapshot keputusan ditampilkan apa adanya.
       </p>
       <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -100,7 +100,7 @@ export function DisciplinaryDeductionRecordContext({
               {row.kind}
               {row.amount != null
                 ? ` · ${formatCurrency(row.amount, { decimals: 2 })}`
-                : " · Nominal tidak ditampilkan — tanpa izin lihat payroll"}
+                : " · Nominal tidak ditampilkan (tanpa izin lihat payroll)"}
               {row.suspensionKind ? ` · Skorsing ${row.suspensionKind}` : ""}
               {row.suspensionPayTreatment ? ` · Upah ${row.suspensionPayTreatment}` : ""}
             </dd>

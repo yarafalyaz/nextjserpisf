@@ -165,13 +165,13 @@ export async function claimIdempotencyKey(
       // gagal eksplisit: client retry dengan key SAMA aman (bila tx pertama
       // rollback, key bebas → klaim ulang menang; bila commit, replay sah).
       throw new Error(
-        "Konflik idempotency key tanpa hasil terbaca — ulangi dengan key yang sama",
+        "Konflik idempotency key tanpa hasil terbaca, ulangi dengan key yang sama",
       )
     }
     // AUD-R6-02: scope beda = konflik nyata, BUKAN sukses.
     if (existing.scope !== scope) {
       throw definitive(
-        `Idempotency key dipakai untuk operasi lain (${existing.scope}) — kirim key baru`,
+        `Idempotency key dipakai untuk operasi lain (${existing.scope}), kirim key baru`,
       )
     }
     // AUD-R9-01: record LAMA tanpa fingerprint (payload_hash NULL, klaim
@@ -187,7 +187,7 @@ export async function claimIdempotencyKey(
     // kebetulan pakai key sama (bug client/duplikat) — tolak tegas.
     if (fingerprint && existing.payloadHash && existing.payloadHash !== fingerprint) {
       throw definitive(
-        "Idempotency key dipakai untuk nominal/target berbeda — kirim key baru untuk intent baru",
+        "Idempotency key dipakai untuk nominal/target berbeda, kirim key baru untuk intent baru",
       )
     }
     if (!existing.resultRefType || !existing.resultRefId) {
@@ -195,7 +195,7 @@ export async function claimIdempotencyKey(
       // tulis ulang buta + tolak sukses palsu. Operator: cek jurnal/saldo
       // manual, lalu submit key baru.
       throw new Error(
-        "Operasi dengan key ini belum selesai (tanpa hasil final) — jangan retry buta, cek jurnal/saldo lalu submit baru",
+        "Operasi dengan key ini belum selesai (tanpa hasil final), jangan retry buta, cek jurnal/saldo lalu submit baru",
       )
     }
     // AUD-R8-03: tipe hasil harus cocok scope (data rusak/salah bind =
@@ -203,7 +203,7 @@ export async function claimIdempotencyKey(
     const expected = EXPECTED_REF_TYPE[scope]
     if (existing.resultRefType !== expected || !existing.resultRefId) {
       throw definitive(
-        `Hasil tersimpan key ini tidak valid (harus ${expected}) — hubungi admin, jangan retry buta`,
+        `Hasil tersimpan key ini tidak valid (harus ${expected}), hubungi admin, jangan retry buta`,
       )
     }
     return {

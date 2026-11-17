@@ -276,7 +276,7 @@ export function SalesInvoiceForm({
             <AlertCircle />
             <AlertTitle>Faktur campuran besi tua</AlertTitle>
             <AlertDescription>
-              Faktur ini mencampur item besi tua dan barang dagang. Pisahkan ke faktur tersendiri — server menolak posting faktur campuran.
+              Faktur ini mencampur item besi tua dan barang dagang. Pisahkan ke faktur tersendiri, server menolak posting faktur campuran.
             </AlertDescription>
           </Alert>
         )}
@@ -317,7 +317,7 @@ export function SalesInvoiceForm({
                         placeholder="Pilih barang..."
                         options={availableItems.map((a) => ({
                           value: String(a.id),
-                          label: `${a.sku ? `${a.name} (${a.sku})` : a.name}${a.isScrapSaleItem ? " — Besi Tua" : ""}`,
+                          label: `${a.sku ? `${a.name} (${a.sku})` : a.name}${a.isScrapSaleItem ? " – Besi Tua" : ""}`,
                         }))}
                       />
                     </td>

@@ -149,7 +149,7 @@ export async function updateChequeStatus(id: number, status: string) {
     if (claimed.count === 0) {
       return {
         success: false,
-        error: "Giro/cek berubah status oleh pengguna lain — muat ulang halaman.",
+        error: "Giro/cek berubah status oleh pengguna lain – muat ulang halaman.",
       }
     }
 
@@ -189,7 +189,7 @@ export async function deleteCheque(id: number) {
       })
     })
     if (claimed.count === 0) {
-      return { success: false, error: "Giro/cek sudah terhapus oleh pengguna lain — muat ulang halaman." }
+      return { success: false, error: "Giro/cek sudah terhapus oleh pengguna lain – muat ulang halaman." }
     }
 
     await logActivity("delete", "Cheque", id, `Menghapus ${cheque.documentNo}`)

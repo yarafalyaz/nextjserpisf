@@ -189,8 +189,8 @@ export function AttendanceForm({
       </FormSection>
 
       <div className="rounded-lg border border-default bg-default-100/50 p-3.5 text-xs leading-relaxed text-muted-foreground">
-        Bila karyawan belum punya jadwal kerja aktif, jam masuk tidak bisa dicatat —
-        buat jadwal kerja lebih dulu di Kalender Kerja.
+        Bila karyawan belum punya jadwal kerja aktif, jam masuk tidak bisa dicatat.
+        Buat jadwal kerja lebih dulu di Kalender Kerja.
       </div>
 
       <FormActions>

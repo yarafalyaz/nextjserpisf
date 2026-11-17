@@ -127,7 +127,7 @@ export function buildSkontroBalanceSheet(input: SkontroBalanceSheetInput): {
       kind: "notice",
       text:
         `Perhatian: Jumlah Aktiva (${balanceAmount(input.totalAssets)}) tidak sama dengan Jumlah Pasiva ` +
-        `(${balanceAmount(totalLiabilitiesAndEquity)}) — selisih ${balanceAmount(balanceDifference)}.`,
+        `(${balanceAmount(totalLiabilitiesAndEquity)}) – selisih ${balanceAmount(balanceDifference)}.`,
     })
   }
 

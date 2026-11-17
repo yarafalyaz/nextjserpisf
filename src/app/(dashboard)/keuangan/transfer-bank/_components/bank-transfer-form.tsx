@@ -140,7 +140,7 @@ export function BankTransferForm({
             placeholder={feeNumber > 0 ? "Wajib dipilih..." : "Opsional"}
           />
           <span className="text-xs text-muted-foreground">
-            Dipakai bila biaya admin lebih dari 0 — biaya mengurangi rekening asal, bukan nominal
+            Dipakai bila biaya admin lebih dari 0, biaya mengurangi rekening asal, bukan nominal
             transfer.
           </span>
         </div>

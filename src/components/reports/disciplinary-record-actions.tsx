@@ -233,7 +233,7 @@ export function DisciplinaryRecordActions({
               {record.employeeResponse}
               {record.employeeResponseLate ? (
                 <span className="ml-2 text-xs font-medium text-amber-700 dark:text-amber-400">
-                  (terlambat — ditempelkan HR)
+                  (terlambat, ditempelkan HR)
                 </span>
               ) : null}
             </p>
@@ -241,7 +241,7 @@ export function DisciplinaryRecordActions({
             <>
               <p className="text-xs text-muted-foreground">
                 Belum ada tanggapan tercatat. Bila karyawan menyampaikan tanggapan lewat jendela
-                7 hari, tempelkan di sini — tercatat berlabel terlambat.
+                7 hari, tempelkan di sini, tercatat berlabel terlambat.
               </p>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`late-response-${record.id}`}>Tanggapan Terlambat</Label>

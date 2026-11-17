@@ -264,7 +264,7 @@ export function evaluateBudgetLock(
     failures.push("Anggaran proyek ini sudah terkunci")
   }
   if (project.projectStatus === "completed") {
-    failures.push("Proyek sudah selesai (completed) — RAB tidak dapat dikunci retroaktif")
+    failures.push("Proyek sudah selesai (completed) – RAB tidak dapat dikunci retroaktif")
   }
   if (project.contractAmount === null || project.contractAmount <= 0) {
     failures.push("Nilai kontrak (contractAmount) belum terisi atau tidak lebih dari 0")

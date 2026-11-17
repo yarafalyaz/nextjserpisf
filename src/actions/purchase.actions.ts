@@ -171,7 +171,7 @@ function parsePoGrQty(raw: unknown, itemId: number, label: string): number {
   const qty = parseLocaleNumber(raw as string | number | null | undefined);
   if (qty === null) {
     throw new Error(
-      `Kuantitas ${label} item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      `Kuantitas ${label} item #${itemId} tidak valid – isi angka lebih dari 0 (mis. 2 atau 2.000).`,
     );
   }
   return qty;
@@ -186,7 +186,7 @@ function parsePoGrMoney(
   const value = parseMoneyAmount(raw as string | number | null | undefined);
   if (value === null || value < 0) {
     throw new Error(
-      `${label} item #${itemId} tidak valid — isi angka 0 atau lebih (mis. 150.000).`,
+      `${label} item #${itemId} tidak valid – isi angka 0 atau lebih (mis. 150.000).`,
     );
   }
   return value;
@@ -379,7 +379,7 @@ async function assertThreeWayMatch(
       po.status === "pending"
     ) {
       throw new Error(
-        `3-way match gagal: Pesanan Pembelian ${po.documentNo} berstatus '${po.status}' — tagihan jasa hanya untuk PO yang sudah disetujui/dipesan.`,
+        `3-way match gagal: Pesanan Pembelian ${po.documentNo} berstatus '${po.status}' – tagihan jasa hanya untuk PO yang sudah disetujui/dipesan.`,
       );
     }
     const otherBills = await tx.vendorBill.aggregate({
@@ -574,7 +574,7 @@ async function assertVendorTaxInvoiceNumberFreeTx(
   });
   if (dupeBill) {
     throw new Error(
-      `Nomor faktur pajak "${number}" sudah dipakai tagihan ${dupeBill.documentNo} vendor yang sama — satu faktur pemasok tidak boleh dikreditkan dua kali.`,
+      `Nomor faktur pajak "${number}" sudah dipakai tagihan ${dupeBill.documentNo} vendor yang sama – satu faktur pemasok tidak boleh dikreditkan dua kali.`,
     );
   }
   const dupeRegister = await tx.taxInvoice.findFirst({
@@ -588,7 +588,7 @@ async function assertVendorTaxInvoiceNumberFreeTx(
   });
   if (dupeRegister) {
     throw new Error(
-      `Nomor faktur pajak "${number}" sudah terdaftar sebagai faktur masukan tagihan lain — tidak boleh ditempel di sini.`,
+      `Nomor faktur pajak "${number}" sudah terdaftar sebagai faktur masukan tagihan lain – tidak boleh ditempel di sini.`,
     );
   }
 }
@@ -615,7 +615,7 @@ async function assertBillPoGrPairTx(
   if (!gr) throw new Error("Penerimaan barang yang ditagih tidak ditemukan.");
   if (params.purchaseOrderId != null && gr.purchaseOrderId !== params.purchaseOrderId) {
     throw new Error(
-      `Penerimaan ${gr.documentNo} bukan milik PO tagihan ini — pasangan PO/penerimaan tidak konsisten.`,
+      `Penerimaan ${gr.documentNo} bukan milik PO tagihan ini – pasangan PO/penerimaan tidak konsisten.`,
     );
   }
   return {
@@ -712,7 +712,7 @@ function parsePurchaseReturnItems(
     );
     if (qty === null) {
       throw new Error(
-        `Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+        `Kuantitas retur item #${itemId} tidak valid – isi angka lebih dari 0 (mis. 2 atau 2.000).`,
       );
     }
     if (qty <= 0) continue;
@@ -723,7 +723,7 @@ function parsePurchaseReturnItems(
       );
       if (price === null || price <= 0) {
         throw new Error(
-          `Harga beli retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 150.000).`,
+          `Harga beli retur item #${itemId} tidak valid – isi angka lebih dari 0 (mis. 150.000).`,
         );
       }
     }
@@ -989,7 +989,7 @@ function parsePurchaseRequestItems(
     );
     if (qty === null) {
       throw new Error(
-        `Kuantitas permintaan item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+        `Kuantitas permintaan item #${itemId} tidak valid – isi angka lebih dari 0 (mis. 2 atau 2.000).`,
       );
     }
     if (qty <= 0) continue;
@@ -2303,7 +2303,7 @@ export async function createVendorPayment(formData: FormData) {
       // halaman tambah/ubah membaca PAYABLE_VENDOR_BILL_STATUSES yang sama,
       // jadi status yang lolos di sini == status yang ditawarkan di sana.
       if (target.status === "draft") {
-        return { success: false, error: "Tagihan masih konsep — konfirmasi dulu sebelum dibayar" };
+        return { success: false, error: "Tagihan masih konsep – konfirmasi dulu sebelum dibayar" };
       }
       if (!(PAYABLE_VENDOR_BILL_STATUSES as readonly string[]).includes(target.status)) {
         return { success: false, error: `Tagihan berstatus '${target.status}' tidak dapat dibayar` };
@@ -2417,7 +2417,7 @@ export async function confirmVendorBill(billId: number) {
       // poster != pembuat (pola processPurchaseReturn). createdBy null
       // (legacy) tetap boleh diposting penyetuju berizin.
       if (fresh.createdBy != null && Number(fresh.createdBy) === Number(user.id)) {
-        throw new Error("Tagihan vendor tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_vendor_bills.");
+        throw new Error("Tagihan vendor tidak boleh diposting oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_vendor_bills.");
       }
       // Titik pengakuan: vendor yang nonaktif/terhapus sesudah draft lahir
       // tidak boleh jadi utang + jurnal (paritas penilaian ulang bank-transfer).
@@ -2776,7 +2776,7 @@ export async function confirmVendorPayment(paymentId: number) {
       // jadi pembuat bisa mengonfirmasi pembayarannya sendiri. createdBy null
       // (legacy) tetap boleh; mirror pola processPurchaseReturn.
       if (freshPayment.createdBy != null && Number(freshPayment.createdBy) === Number(user.id)) {
-        throw new Error("Pembayaran vendor tidak boleh dikonfirmasi oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_vendor_payments.");
+        throw new Error("Pembayaran vendor tidak boleh dikonfirmasi oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_vendor_payments.");
       }
       // Approval window can reopen after the outside-tx assertApproved (edit
       // opens a fresh pending approval); re-check inside the row lock.
@@ -3059,7 +3059,7 @@ export async function processPurchaseReturn(returnId: number) {
     // stok keluar + jurnal, jadi penyelesai != pembuat. createdBy null
     // (baris legacy) boleh diproses penyetuju berizin.
     if (purchaseReturn.createdBy != null && Number(purchaseReturn.createdBy) === Number(user.id)) {
-      throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_purchase_returns.");
+      throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_purchase_returns.");
     }
 
     // Scope gudang: hook mengeluarkan stok FIFO dari gudang hasil resolusi bersama
@@ -3092,7 +3092,7 @@ export async function processPurchaseReturn(returnId: number) {
         throw new Error("Purchase return hanya bisa diproses dari status draft");
       }
       if (fresh.createdBy != null && Number(fresh.createdBy) === Number(user.id)) {
-        throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_purchase_returns.");
+        throw new Error("Retur pembelian tidak boleh diproses oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_purchase_returns.");
       }
       const freshActive = fresh.items.filter((item) => Number(item.qty) > 0);
       const ctx = await loadPurchaseReturnWarehouseContext(
@@ -3170,7 +3170,7 @@ export async function deletePurchaseRequest(id: number) {
       });
       if (linkedPo > 0) {
         throw new Error(
-          "Tidak bisa menghapus PR yang sudah memiliki pesanan pembelian — hapus/batalkan pesanan terkait terlebih dahulu.",
+          "Tidak bisa menghapus PR yang sudah memiliki pesanan pembelian – hapus/batalkan pesanan terkait terlebih dahulu.",
         );
       }
       const claim = await tx.purchaseRequest.deleteMany({
@@ -3679,7 +3679,7 @@ export async function deleteGoodsReceipt(id: number) {
               const raw = factorMap.get(`${row.itemId}:${row.uom}`);
               if (raw == null || !(raw > 0)) {
                 console.warn(
-                  `[purchase.actions] konversi ${row.uom} untuk item #${row.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar. Daftarkan konversi UoM item tersebut.`,
+                  `[purchase.actions] konversi ${row.uom} untuk item #${row.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} – qty dihitung 1:1 dalam satuan dasar. Daftarkan konversi UoM item tersebut.`,
                 );
               } else {
                 factor = raw;
@@ -4709,7 +4709,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
           throw new Error("Tagihan sudah lunas atau dibatalkan");
         }
         if (target.status === "draft") {
-          throw new Error("Tagihan masih konsep — konfirmasi dulu sebelum dibayar");
+          throw new Error("Tagihan masih konsep – konfirmasi dulu sebelum dibayar");
         }
         if (!(PAYABLE_VENDOR_BILL_STATUSES as readonly string[]).includes(target.status)) {
           throw new Error(`Tagihan berstatus '${target.status}' tidak dapat dibayar`);
@@ -4793,7 +4793,7 @@ export async function setVendorBillTaxInvoiceNumber(
       return {
         success: false,
         error:
-          "Nomor faktur pajak tidak valid — hanya huruf, angka, spasi, titik, dan strip (maks 50 karakter).",
+          "Nomor faktur pajak tidak valid – hanya huruf, angka, spasi, titik, dan strip (maks 50 karakter).",
       };
     }
 
@@ -4801,7 +4801,7 @@ export async function setVendorBillTaxInvoiceNumber(
     if (bill.status === "draft") {
       return {
         success: false,
-        error: "Tagihan masih konsep — ubah nomor lewat edit, bukan aksi ini.",
+        error: "Tagihan masih konsep – ubah nomor lewat edit, bukan aksi ini.",
       };
     }
     if (bill.status === "cancelled") {
@@ -4810,7 +4810,7 @@ export async function setVendorBillTaxInvoiceNumber(
     if (Number(bill.tax ?? 0) <= 0) {
       return {
         success: false,
-        error: "Tagihan ini tidak memuat PPN — tidak ada yang dipecah ke PPN Masukan.",
+        error: "Tagihan ini tidak memuat PPN – tidak ada yang dipecah ke PPN Masukan.",
       };
     }
     if (isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)) {
@@ -4846,8 +4846,8 @@ export async function setVendorBillTaxInvoiceNumber(
       if (!elig.eligible) {
         throw new Error(
           elig.reason === "expired"
-            ? `Jendela kredit PPN sudah lewat (masa faktur ${invoicePeriod}, maks 3 masa sesudahnya) — nomor tidak bisa dikreditkan lagi.`
-            : `Masa kredit ${creditPeriod} mendahului masa faktur ${invoicePeriod} — nomor tidak bisa dikreditkan.`,
+            ? `Jendela kredit PPN sudah lewat (masa faktur ${invoicePeriod}, maks 3 masa sesudahnya) – nomor tidak bisa dikreditkan lagi.`
+            : `Masa kredit ${creditPeriod} mendahului masa faktur ${invoicePeriod} (nomor tidak bisa dikreditkan.)`,
         );
       }
 
@@ -4869,13 +4869,13 @@ export async function setVendorBillTaxInvoiceNumber(
         select: { id: true },
       });
       if (origins.length === 0) {
-        throw new Error("Jurnal tagihan terposting tidak ditemukan — konfirmasi dulu.");
+        throw new Error("Jurnal tagihan terposting tidak ditemukan – konfirmasi dulu.");
       }
       await reverseJournalsByReferenceTx(
         tx,
         "VendorBill",
         id,
-        `Nomor faktur pajak ${clean} diisi pasca-posting — pecah PPN dari HPP`,
+        `Nomor faktur pajak ${clean} diisi pasca-posting – pecah PPN dari HPP`,
         undefined,
       );
       await tx.vendorBill.update({
@@ -4954,7 +4954,7 @@ export async function voidVendorBill(id: number) {
         Number(fresh.balanceDue ?? 0);
       if (nonCashReduction > SETTLEMENT_TOLERANCE_IDR) {
         throw new Error(
-          "Tagihan ini sudah berkurang/lunas lewat kredit vendor atau relief retur (bukan pembayaran kas). Pembatalan akan menghanguskan kredit tersebut — selesaikan secara manual bersama admin keuangan sebelum membatalkan.",
+          "Tagihan ini sudah berkurang/lunas lewat kredit vendor atau relief retur (bukan pembayaran kas). Pembatalan akan menghanguskan kredit tersebut – selesaikan secara manual bersama admin keuangan sebelum membatalkan.",
         );
       }
       // R8-PAJAK-07: bill ber-bupot aktif tidak bisa di-void diam-diam —

@@ -55,7 +55,7 @@ export function PurchaseOrderDraftQueueCard({
           {PURCHASE_ORDER_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()} ·{" "}
           {formatNumber(levelCounts.menunggu)}{" "}
           {PURCHASE_ORDER_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()} ·{" "}
-          {formatNumber(totalDocuments)} pesanan draft — {formatCurrencyExact(totalGrandTotal)}{" "}
+          {formatNumber(totalDocuments)} pesanan draft, {formatCurrencyExact(totalGrandTotal)}{" "}
           {totalLabel}
         </>
       }

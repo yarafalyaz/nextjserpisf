@@ -51,7 +51,7 @@ export const PPH23_SERVICE_RATE = 2
  */
 export function resolvePph23Rate(objectCode: string | null | undefined): 2 {
   if (!objectCode || objectCode.trim() === "") {
-    throw new Error("PPh 23: kode objek jasa wajib dipilih per jenis jasa (PMK-141/2015) — tanpa kode, tarif tak bisa ditentukan.")
+    throw new Error("PPh 23: kode objek jasa wajib dipilih per jenis jasa (PMK-141/2015) – tanpa kode, tarif tak bisa ditentukan.")
   }
   return PPH23_SERVICE_RATE
 }
@@ -66,11 +66,11 @@ export function resolvePph42Rate(
 ): number {
   const code = (objectCode ?? "").trim()
   if (code === "") {
-    throw new Error("PPh 4(2) konstruksi: kode objek wajib dipilih — tarif mengikuti kode (1,75/2,65/3,5/4/6%).")
+    throw new Error("PPh 4(2) konstruksi: kode objek wajib dipilih – tarif mengikuti kode (1,75/2,65/3,5/4/6%).")
   }
   const rate = rateByObjectCode[code]
   if (rate == null || !(rate > 0)) {
-    throw new Error(`PPh 4(2) konstruksi: kode objek "${code}" tidak dikenal — pilih kode konstruksi yang berlaku.`)
+    throw new Error(`PPh 4(2) konstruksi: kode objek "${code}" tidak dikenal – pilih kode konstruksi yang berlaku.`)
   }
   return safeRound(rate, 2)
 }
@@ -134,27 +134,27 @@ export function resolvePph42RentRateEntry(
 ): Pph42RentResolution {
   const code = (objectCode ?? "").trim()
   if (code === "") {
-    throw new Error("PPh 4(2) sewa: kode objek wajib terisi di master jenis PPH42-SEWA — tanpa kode, bupot sewa tidak diterbitkan.")
+    throw new Error("PPh 4(2) sewa: kode objek wajib terisi di master jenis PPH42-SEWA – tanpa kode, bupot sewa tidak diterbitkan.")
   }
   if (!OBJECT_CODE_FORMAT.test(code)) {
-    throw new Error(`PPh 4(2) sewa: kode objek "${code}" berformat rusak (wajib pola NN-NNN-NN) — di luar katalog kode objek sewa.`)
+    throw new Error(`PPh 4(2) sewa: kode objek "${code}" berformat rusak (wajib pola NN-NNN-NN) – di luar katalog kode objek sewa.`)
   }
   if (code.startsWith("28-409")) {
-    throw new Error("PPh 4(2) sewa: kode objek konstruksi tidak berlaku untuk sewa tanah/bangunan — pilih kode objek sewa.")
+    throw new Error("PPh 4(2) sewa: kode objek konstruksi tidak berlaku untuk sewa tanah/bangunan – pilih kode objek sewa.")
   }
   const entry = catalog.find((e) => e.objectCode.trim() === code)
   if (!entry) {
-    throw new Error(`PPh 4(2) sewa: kode objek "${code}" di luar katalog master aktif — bupot sewa hanya memakai kode objek dari master jenis PPH42-SEWA yang aktif.`)
+    throw new Error(`PPh 4(2) sewa: kode objek "${code}" di luar katalog master aktif – bupot sewa hanya memakai kode objek dari master jenis PPH42-SEWA yang aktif.`)
   }
   if (safeRound(entry.rate, 2) !== PPH42_RENT_RATE) {
-    throw new Error(`PPh 4(2) sewa: tarif master untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% — koreksi master sebelum bupot diterbitkan.`)
+    throw new Error(`PPh 4(2) sewa: tarif master untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% – koreksi master sebelum bupot diterbitkan.`)
   }
   const official = findPph42RentCatalogEntry(code, withholdingDate)
   if (!official) {
-    throw new Error(`PPh 4(2) sewa: nama katalog belum tersedia untuk kode objek "${code}" — nama kode tidak dikarang dari string kode; lengkapi katalog resmi sebelum bupot diterbitkan.`)
+    throw new Error(`PPh 4(2) sewa: nama katalog belum tersedia untuk kode objek "${code}" – nama kode tidak dikarang dari string kode; lengkapi katalog resmi sebelum bupot diterbitkan.`)
   }
   if (safeRound(official.rate, 2) !== PPH42_RENT_RATE) {
-    throw new Error(`PPh 4(2) sewa: tarif resmi katalog untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% — koreksi katalog sebelum bupot diterbitkan.`)
+    throw new Error(`PPh 4(2) sewa: tarif resmi katalog untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% – koreksi katalog sebelum bupot diterbitkan.`)
   }
   let evidence: Pph42RentResolution["evidence"]
   if (official.requiresEvidence) {

@@ -98,7 +98,7 @@ export function evaluateWorkOrderOperationTransition(input: {
   if (targetStatus === "skipped" && !(input.notes ?? "").trim()) {
     return {
       ok: false,
-      error: "Tahap yang dilewati wajib diisi alasan (notes) — melewati tahap mengubah dasar hitung progres.",
+      error: "Tahap yang dilewati wajib diisi alasan (notes) – melewati tahap mengubah dasar hitung progres.",
     }
   }
   if (workOrderStatus !== "in_progress") {

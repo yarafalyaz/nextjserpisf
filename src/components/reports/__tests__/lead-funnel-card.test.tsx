@@ -50,7 +50,7 @@ describe("LeadFunnelCard F-2026-10-22-092-S", () => {
     const { container, root } = renderCard(<LeadFunnelCard funnel={funnel} />)
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Corong Prospek"]')).not.toBeNull()
-    expect(text).toContain("Corong Prospek — Posisi saat ini")
+    expect(text).toContain("Corong Prospek: Posisi saat ini")
     expect(text).toContain("Baru")
     expect(text).toContain("Menang")
     expect(text).toContain("Status tidak dikenal")

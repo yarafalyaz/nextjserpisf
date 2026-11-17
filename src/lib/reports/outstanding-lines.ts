@@ -194,7 +194,7 @@ export function buildOutstandingLines(input: {
       kind: "notice",
       text:
         `Periode ini memuat lebih dari satu satuan, jadi kolom kuantitas (Dipesan, ${wording.fulfilledColumn}, ` +
-        `Kurang) TIDAK dijumlahkan — hanya kolom nilai sisa yang bertotal.`,
+        `Kurang) TIDAK dijumlahkan – hanya kolom nilai sisa yang bertotal.`,
     })
   }
 

@@ -138,7 +138,7 @@ export function AssetChangeEventPanel({
 
   function submitResult(res: { success: boolean; error?: string; journalNumber?: string | null } | undefined, okText: string) {
     if (res?.success) {
-      showSuccess(res.journalNumber ? `${okText} — jurnal ${res.journalNumber}` : okText)
+      showSuccess(res.journalNumber ? `${okText} (jurnal ${res.journalNumber})` : okText)
       setMode("none")
       setReversalTarget(null)
       setEventEffectiveDate("")

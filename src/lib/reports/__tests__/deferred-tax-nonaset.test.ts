@@ -252,6 +252,6 @@ describe("sumber temporer non-aset F-2026-10-23-126-V", () => {
     expect(bad.taxRatePercent).toBeNull()
     expect(bad.totals.deferredTaxAssetIndication).toBe(0)
     const op = build({ rateSource: "operator" })
-    expect(op.rateSourceLabel).toBe("tarif pasokan operator — bukan master")
+    expect(op.rateSourceLabel).toBe("tarif pasokan operator – bukan master")
   })
 })

@@ -39,7 +39,7 @@ import type { PayrollFrequency } from "@/lib/reports/payroll-frequency"
 
 /** Label verbatim untuk UI (spec §3 — UI menempel apa adanya). */
 export const LOAN_INSTALLMENT_HISTORY_NOTICE =
-  "Histori cicilan baca-saja — potongan lampau tampil sebagai agregat per slip " +
+  "Histori cicilan baca-saja – potongan lampau tampil sebagai agregat per slip " +
   "(semua pinjaman) karena alokasi per pinjaman belum tercatat; bukan alokasi pinjaman ini."
 export const LOAN_INSTALLMENT_PAID_LABEL = "Terbayar s.d. kini"
 export const LOAN_INSTALLMENT_AGGREGATE_LABEL =

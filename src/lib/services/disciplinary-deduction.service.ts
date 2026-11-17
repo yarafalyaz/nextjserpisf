@@ -42,17 +42,17 @@ async function resolveAccountBySetting(
   label: string,
 ): Promise<number> {
   if (!accountId) {
-    throw new Error(`Mapping akun ${label} belum dikonfigurasi — isi di Pengaturan > Mapping Akun sebelum potongan disiplin diposting (fail-closed).`)
+    throw new Error(`Mapping akun ${label} belum dikonfigurasi, isi di Pengaturan > Mapping Akun sebelum potongan disiplin diposting (fail-closed).`)
   }
   const account = await client.account.findUnique({
     where: { id: accountId },
     select: { code: true, isActive: true, deletedAt: true },
   })
   if (!account || !account.isActive || account.deletedAt) {
-    throw new Error(`Akun ${label} tidak aktif atau tidak ditemukan — potongan disiplin ditolak (fail-closed).`)
+    throw new Error(`Akun ${label} tidak aktif atau tidak ditemukan, potongan disiplin ditolak (fail-closed).`)
   }
   if (account.code !== expectedCode) {
-    throw new Error(`Akun ${label} harus berkode ${expectedCode}, terpetakan '${account.code}' — potongan disiplin ditolak.`)
+    throw new Error(`Akun ${label} harus berkode ${expectedCode}, terpetakan '${account.code}', potongan disiplin ditolak.`)
   }
   return accountId
 }
@@ -146,7 +146,7 @@ export async function applyDisciplinaryDeduction(
     alreadyApplied: Number(applied._sum.amount ?? 0),
   })
   if (!capGuard.allowed) throw new Error(capGuard.message)
-  if (amount <= 0) throw new Error("Nominal potongan disiplin periode ini nol — tidak ada jurnal dibuat.")
+  if (amount <= 0) throw new Error("Nominal potongan disiplin periode ini nol, tidak ada jurnal dibuat.")
 
   // Akun kredit: denda -> 710006 (setting); ganti rugi -> snapshot keputusan.
   let creditAccountId: number
@@ -162,7 +162,7 @@ export async function applyDisciplinaryDeduction(
       select: { code: true, isActive: true, deletedAt: true },
     })
     if (!account || !account.isActive || account.deletedAt) {
-      throw new Error("Akun kompensasi pada dokumen keputusan tidak aktif — potongan ditolak (fail-closed).")
+      throw new Error("Akun kompensasi pada dokumen keputusan tidak aktif, potongan ditolak (fail-closed).")
     }
     if (account.code === DISC09_FINE_INCOME_CODE) {
       throw new Error("Ganti rugi tidak boleh dikredit ke 710006 Pendapatan Denda Karyawan.")
@@ -211,7 +211,7 @@ export async function applyDisciplinaryDeduction(
       alreadyApplied: Number(appliedInTx._sum.amount ?? 0),
     })
     if (!fresh.guard.allowed) throw new Error(fresh.guard.message)
-    if (fresh.amount <= 0) throw new Error("Nominal potongan disiplin periode ini nol — tidak ada jurnal dibuat.")
+    if (fresh.amount <= 0) throw new Error("Nominal potongan disiplin periode ini nol, tidak ada jurnal dibuat.")
     const freshAmount = fresh.amount
 
     const journal = await new JournalService(tx).createJournal({

@@ -23,7 +23,7 @@
  */
 
 export const LABOR_RECAP_NOTICE =
-  "Rekap informatif — bukan dasar pembayaran, bukan dasar jurnal, " +
+  "Rekap informatif – bukan dasar pembayaran, bukan dasar jurnal, " +
   "dan tidak membuat baris payroll secara otomatis."
 
 export interface LaborRecapCostInput {

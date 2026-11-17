@@ -97,7 +97,7 @@ export default async function VendorPaymentDetailPage({
               </CanCreate>
             )}
             {/* FIN-BR-008: pembayaran completed dikoreksi lewat pembalikan
-                beralasan — baris asal tetap ada (status `reversed`), jurnal
+                beralasan, baris asal tetap ada (status `reversed`), jurnal
                 lawan dibukukan, alokasi tagihan dikembalikan. Tanpa tombol ini
                 pembayaran vendor yang sudah dibayar tidak punya jalur koreksi
                 apa pun dari UI (hanya Cetak), padahal jalur penjualan

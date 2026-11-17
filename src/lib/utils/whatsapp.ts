@@ -73,7 +73,7 @@ export function statementBalanceSentence(closingBalance: number): string {
     return `Saldo akhir periode: ${formatCurrency(closingBalance)}.`;
   }
   if (closingBalance === 0) {
-    return "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini.";
+    return "Saldo akhir periode: Rp 0 – tidak ada sisa piutang pada akhir periode ini.";
   }
   return `Saldo akhir periode menunjukkan kelebihan bayar sebesar ${formatCurrency(Math.abs(closingBalance))} yang tercatat sebagai kredit Anda.`;
 }

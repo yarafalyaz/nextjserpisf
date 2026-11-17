@@ -212,9 +212,9 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
         // Gerbang dokumen sumber (pola bupot atas bill): terbit/cermin atas
         // faktur draft/batal/soft-deleted menanam nomor kepala pada dokumen
         // mati dan SPT cukai lahir tanpa kewajiban diakui.
-        if (linkedInvoice.deletedAt != null) throw definitive("Faktur penjualan tertaut sudah dihapus — faktur pajak tidak bisa diterbitkan")
+        if (linkedInvoice.deletedAt != null) throw definitive("Faktur penjualan tertaut sudah dihapus, faktur pajak tidak bisa diterbitkan")
         if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(linkedInvoice.status)) {
-          throw definitive("Faktur penjualan tertaut belum terposting — faktur pajak hanya untuk posted/partial/paid")
+          throw definitive("Faktur penjualan tertaut belum terposting, faktur pajak hanya untuk posted/partial/paid")
         }
         if (linkedInvoice?.quotationId != null) {
           // Kunci baris quotation sebelum Sigma FP UM dibaca: FP UM
@@ -261,10 +261,10 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           })
           if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan")
           if (bill.deletedAt != null || bill.status === "cancelled") {
-            throw definitive("Tagihan vendor tertaut sudah batal/terhapus — faktur pajak tidak bisa diterbitkan")
+            throw definitive("Tagihan vendor tertaut sudah batal/terhapus, faktur pajak tidak bisa diterbitkan")
           }
           if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
-            throw definitive("Tagihan vendor tertaut belum terposting — faktur pajak hanya untuk posted/partial/paid")
+            throw definitive("Tagihan vendor tertaut belum terposting, faktur pajak hanya untuk posted/partial/paid")
           }
           if (bill.vendorId !== input.vendorId) {
             throw definitive(`Tagihan vendor tertaut milik vendor #${bill.vendorId} yang berbeda dari vendor #${input.vendorId}`)
@@ -435,17 +435,17 @@ export async function issueDownPaymentTaxInvoice(
       }
       const snapshot = snapshotFromDownPaymentRow(dp as never)
       if (!snapshot) {
-        throw definitive("Snapshot PPN uang muka belum dibekukan untuk DP ini (DP legacy pra-fitur) — FP UM tidak dapat diterbitkan dari hitungan ulang")
+        throw definitive("Snapshot PPN uang muka belum dibekukan untuk DP ini (DP legacy pra-fitur), FP UM tidak dapat diterbitkan dari hitungan ulang")
       }
       if (!snapshot.taxable) {
-        throw definitive("DP ini bukan subjek FP uang muka (snapshot PPN nol) — tidak ada FP UM yang diterbitkan")
+        throw definitive("DP ini bukan subjek FP uang muka (snapshot PPN nol), tidak ada FP UM yang diterbitkan")
       }
       await assertPeriodOpen(dp.paymentDate, tx as never)
       const active = await tx.taxInvoice.findFirst({
         where: { downPaymentId: dp.id, direction: "out", djpStatus: { notIn: ["cancelled", "replaced"] } },
         select: { id: true },
       })
-      if (active) throw definitive(`DP ini sudah memiliki FP uang muka aktif (#${active.id}) — satu FP UM aktif per DP`)
+      if (active) throw definitive(`DP ini sudah memiliki FP uang muka aktif (#${active.id}), satu FP UM aktif per DP`)
       const dupe = await tx.taxInvoice.findFirst({
         where: { direction: "out", taxInvoiceNumber: number },
         select: { id: true },
@@ -547,12 +547,12 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
       await tx.$queryRaw`SELECT id FROM tax_invoices WHERE id = ${input.replacesId} FOR UPDATE`
       const old = await tx.taxInvoice.findUniqueOrThrow({ where: { id: input.replacesId } })
       if (old.djpStatus === "cancelled") throw definitive("Faktur batal tidak bisa diganti")
-      if (old.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti — rantai satu pengganti per faktur")
+      if (old.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti, rantai satu pengganti per faktur")
       // R8-PAJAK-04: faktur masukan yang sudah dikreditkan tidak boleh
       // diganti — asal tetap credited terhitung SPT sementara pengganti
       // uncredited → PPN Masukan overstate/dobel atas satu nomor seri.
       if (old.direction === "in" && old.creditStatus === "credited") {
-        throw definitive("Faktur masukan sudah dikreditkan tidak bisa diganti — batalkan kreditnya dulu lewat masa yang sama")
+        throw definitive("Faktur masukan sudah dikreditkan tidak bisa diganti, batalkan kreditnya dulu lewat masa yang sama")
       }
       // Pengganti memakai masa faktur DIGANTI (PER-11/PJ/2025): masa asal
       // terkunci menolak; tanggal terbit pengganti bebas (reportedAtPeriod).
@@ -665,7 +665,7 @@ export async function cancelTaxInvoice(input: CancelTaxInvoiceInput): Promise<Ta
       await tx.$queryRaw`SELECT id FROM tax_invoices WHERE id = ${input.id} FOR UPDATE`
       const inv = await tx.taxInvoice.findUniqueOrThrow({ where: { id: input.id } })
       if (inv.djpStatus === "cancelled") throw definitive("Faktur ini sudah batal")
-      if (inv.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti — batal faktur pengganti, bukan asal")
+      if (inv.djpStatus === "replaced") throw definitive("Faktur ini sudah diganti, batal faktur pengganti, bukan asal")
       await assertPeriodOpen(inv.taxInvoiceDate, tx as never)
       // Faktur masukan yang sudah dikreditkan lalu dibatalkan wajib lepas
       // status kreditnya: baris batal ter-skip di SPT, tapi creditStatus
@@ -768,10 +768,10 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       // replaced/draft/rejected yang dikreditkan = kredit dobel satu
       // nomor seri (asal dan pengganti sama-sama terhitung SPT).
       if (inv.djpStatus === "cancelled") throw definitive("Faktur batal tidak bisa dikreditkan")
-      if (inv.djpStatus === "replaced") throw definitive("Faktur sudah diganti tidak bisa dikreditkan — kreditkan faktur penggantinya")
+      if (inv.djpStatus === "replaced") throw definitive("Faktur sudah diganti tidak bisa dikreditkan, kreditkan faktur penggantinya")
       if (inv.djpStatus === "rejected") throw definitive("Faktur ditolak DJP tidak bisa dikreditkan")
       if (inv.djpStatus === "draft") throw definitive("Faktur draft belum terbit tidak bisa dikreditkan")
-      if (inv.creditStatus === "credited") throw definitive("Faktur ini sudah dikreditkan — duplikat kredit ditolak")
+      if (inv.creditStatus === "credited") throw definitive("Faktur ini sudah dikreditkan, duplikat kredit ditolak")
       // Putaran 48: bill tertaut dinilai ulang hidup di titik kredit (pola
       // gerbang sumber issue): void bill tidak menyentuh baris faktur, jadi
       // tanpa ini FP masukan atas pembelian yang sudah batal tetap
@@ -783,12 +783,12 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
           where: { id: inv.vendorBillId },
           select: { status: true, deletedAt: true },
         })
-        if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan — faktur tidak bisa dikreditkan")
+        if (!bill) throw definitive("Tagihan vendor tertaut tidak ditemukan, faktur tidak bisa dikreditkan")
         if (bill.deletedAt != null || bill.status === "cancelled") {
-          throw definitive("Tagihan vendor tertaut sudah batal/terhapus — faktur masukan tidak bisa dikreditkan")
+          throw definitive("Tagihan vendor tertaut sudah batal/terhapus, faktur masukan tidak bisa dikreditkan")
         }
         if (!(RECOGNISED_AP_STATUSES as readonly string[]).includes(bill.status)) {
-          throw definitive("Tagihan vendor tertaut belum terposting — faktur masukan tidak bisa dikreditkan")
+          throw definitive("Tagihan vendor tertaut belum terposting, faktur masukan tidak bisa dikreditkan")
         }
       }
       if (input.nonCreditableReason) {
@@ -800,7 +800,7 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       if (!check.eligible) {
         if (check.reason === "expired") {
           await tx.taxInvoice.update({ where: { id: inv.id }, data: { creditStatus: "expired" } })
-          expiredError = `Masa kredit ${input.creditPeriod} lewat jendela 3 masa dari ${inv.taxPeriod} — faktur expired`
+          expiredError = `Masa kredit ${input.creditPeriod} lewat jendela 3 masa dari ${inv.taxPeriod}, faktur expired`
           return
         }
         throw definitive(`Masa kredit ${input.creditPeriod} sebelum masa faktur ${inv.taxPeriod}`)

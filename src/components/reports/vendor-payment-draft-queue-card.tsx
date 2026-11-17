@@ -56,7 +56,7 @@ export function VendorPaymentDraftQueueCard({
           {VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()} ·{" "}
           {formatNumber(levelCounts.menunggu)}{" "}
           {VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()} ·{" "}
-          {formatNumber(totalDocuments)} pembayaran draft — {formatCurrencyExact(totalAmount)}{" "}
+          {formatNumber(totalDocuments)} pembayaran draft, {formatCurrencyExact(totalAmount)}{" "}
           {totalLabel}
         </>
       }

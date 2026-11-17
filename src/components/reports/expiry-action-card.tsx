@@ -31,7 +31,7 @@ export function ExpiryActionCard({ queue }: Readonly<{ queue: ExpiryActionQueue 
       emptyText="Tidak ada batch kedaluwarsa atau yang kedaluwarsa dalam 30 hari ke depan"
     >
       <p className="mb-4 text-sm text-muted-foreground">
-        Urut kedaluwarsa paling awal — keluarkan / tindak batch teratas lebih dulu. Nilai adalah
+        Urut kedaluwarsa paling awal, keluarkan / tindak batch teratas lebih dulu. Nilai adalah
         estimasi qty × harga pokok barang saat ini, bukan nilai buku lapisan FIFO.
       </p>
       <div className="overflow-x-auto">

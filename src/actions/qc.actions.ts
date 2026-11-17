@@ -401,7 +401,7 @@ export async function createQcInspection(formData: FormData) {
       "QcInspection",
       inspection.id,
       `Inspeksi QC ${documentNo} (${status}) untuk ${v.referenceType} #${v.referenceId}` +
-        (raisedNcrIds.length > 0 ? ` — ${raisedNcrIds.length} NCR otomatis` : ""),
+        (raisedNcrIds.length > 0 ? `, ${raisedNcrIds.length} NCR otomatis` : ""),
     )
     revalidatePath("/produksi/qc/inspeksi")
     revalidatePath("/produksi/qc/ncr")

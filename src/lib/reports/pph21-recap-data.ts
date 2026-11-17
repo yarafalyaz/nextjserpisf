@@ -78,7 +78,7 @@ function periodTable(recap: Pph21Recap): { columns: TableColumn[]; rows: TableRo
   }
   if (recap.excludedSlips > 0) rows.push({ kind: "notice", text: `${recap.excludedSlips} slip belum disetujui/dibayar (draft/dll) tidak dihitung.` })
   if (recap.unreadablePeriodSlips > 0) rows.push({ kind: "notice", text: `${recap.unreadablePeriodSlips} slip disetujui periode-nya tidak terbaca dan tidak dihitung.` })
-  rows.push({ kind: "notice", text: "Rekap baca dari slip terbit — bukan berkas ekspor DJP/e-Bupot." })
+  rows.push({ kind: "notice", text: "Rekap baca dari slip terbit – bukan berkas ekspor DJP/e-Bupot." })
   return { columns: PERIOD_COLUMNS, rows }
 }
 

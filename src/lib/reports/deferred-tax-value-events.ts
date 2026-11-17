@@ -38,14 +38,14 @@ import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/mat
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const VALUE_EVENT_SOURCE_UNAVAILABLE_LABEL =
-  "belum tersedia — peristiwa penyesuaian nilai belum terbekukan"
+  "belum tersedia – peristiwa penyesuaian nilai belum terbekukan"
 export const VALUE_EVENT_FISCAL_NOT_FROZEN_LABEL = "Fiskal belum terbekukan"
 export const VALUE_EVENT_RECOGNITION_ELIGIBLE_LABEL = "dapat diakui analitis"
 export const VALUE_EVENT_RECOGNITION_UNTESTED_LABEL =
-  "belum teruji — bukan angka pengakuan"
+  "belum teruji – bukan angka pengakuan"
 export const VALUE_EVENT_FACILITY_LABEL =
-  "belum terhitung — fasilitas tarif khusus, butuh vonis akuntan"
-export const VALUE_EVENT_OPERATOR_RATE_LABEL = "tarif pasokan operator — bukan master"
+  "belum terhitung – fasilitas tarif khusus, butuh vonis akuntan"
+export const VALUE_EVENT_OPERATOR_RATE_LABEL = "tarif pasokan operator – bukan master"
 
 export type DeferredTaxValueEventRateSource = "master" | "operator"
 
@@ -260,7 +260,7 @@ export function buildDeferredTaxValueEventSource(input: {
       totals.reversed += 1
       rows.push({
         kind: "data",
-        cells: [label, eventLabel, "–", "–", "–", "Direversal — tidak dihitung", "–", finalTaxCell],
+        cells: [label, eventLabel, "–", "–", "–", "Direversal – tidak dihitung", "–", finalTaxCell],
       })
       continue
     }
@@ -312,7 +312,7 @@ export function buildDeferredTaxValueEventSource(input: {
           amount(deltaCarrying),
           amount(deltaFiscal),
           "–",
-          "Ditolak — pembalikan melebihi kumulatif penurunan aset yang sama",
+          "Ditolak – pembalikan melebihi kumulatif penurunan aset yang sama",
           "–",
           finalTaxCell,
         ],
@@ -363,7 +363,7 @@ export function buildDeferredTaxValueEventSource(input: {
         amount(deltaCarrying),
         amount(deltaFiscal),
         amount(effective),
-        cappedExcess !== 0 ? `${direction} — sebagian melebihi plafon tidak diakui` : direction,
+        cappedExcess !== 0 ? `${direction} (sebagian melebihi plafon tidak diakui)` : direction,
         amount(indication),
         finalTaxCell,
       ],
@@ -409,7 +409,7 @@ export function buildDeferredTaxValueEventSource(input: {
       kind: "notice",
       text:
         `${totals.unavailable} peristiwa tidak dihitung (${VALUE_EVENT_FISCAL_NOT_FROZEN_LABEL.toLowerCase()} atau fasilitas), ` +
-        `${totals.rejected} ditolak, ${totals.reversed} direversal — tidak ikut komponen temporer.`,
+        `${totals.rejected} ditolak, ${totals.reversed} direversal – tidak ikut komponen temporer.`,
     })
   }
   if (totals.deferredTaxAssetIndication > 0) {

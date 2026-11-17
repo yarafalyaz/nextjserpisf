@@ -70,7 +70,7 @@ export default async function CostCenterDetailPage({
         <DetailField label="Status" value={costCenter.isActive ? "Aktif" : "Nonaktif"} />
         <DetailField label="Induk" value={
           costCenter.parent
-            ? <Link href={entityHref("/keuangan/pusat-biaya", costCenter.parent)} className="text-primary hover:underline">{costCenter.parent.code} — {costCenter.parent.name}</Link>
+            ? <Link href={entityHref("/keuangan/pusat-biaya", costCenter.parent)} className="text-primary hover:underline">{costCenter.parent.code} – {costCenter.parent.name}</Link>
             : "-"
         } />
         <DetailField label="Dibuat" value={formatDate(costCenter.createdAt)} />

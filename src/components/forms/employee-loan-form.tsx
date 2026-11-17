@@ -150,7 +150,7 @@ export function EmployeeLoanForm({ employees, loan, redirectTo = "/sdm/pinjaman"
               aria-describedby="weeklyInstallment-hint"
             />
             <p id="weeklyInstallment-hint" className="text-xs text-muted-foreground">
-              Opsional. Kosongkan bila belum diatur dalam perjanjian tertulis — pinjaman
+              Opsional. Kosongkan bila belum diatur dalam perjanjian tertulis, pinjaman
               tanpa nominal mingguan menahan karyawan dari run gaji WEEKLY. Nilai tidak
               dihitung otomatis dari cicilan bulanan.
             </p>

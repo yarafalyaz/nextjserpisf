@@ -51,24 +51,24 @@ import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/mat
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const NONASET_PROVISION_ZERO_VERIFIED_LABEL =
-  "provisi garansi: rute provisi mati — saldo provisi nol terverifikasi jurnal"
+  "provisi garansi: rute provisi mati – saldo provisi nol terverifikasi jurnal"
 export const NONASET_PROVISION_UNMAPPED_LABEL =
-  "provisi garansi: belum tersedia — akun provisi belum terpetakan"
+  "provisi garansi: belum tersedia – akun provisi belum terpetakan"
 export const NONASET_CKPN_UNAVAILABLE_LABEL =
-  "CKPN: belum tersedia — inti penyisihan belum terbekukan"
+  "CKPN: belum tersedia – inti penyisihan belum terbekukan"
 export const NONASET_FISCAL_LOSS_UNAVAILABLE_LABEL =
-  "rugi fiskal: belum tersedia — register kertas kerja SPT belum terbekukan"
+  "rugi fiskal: belum tersedia – register kertas kerja SPT belum terbekukan"
 export const NONASET_RECOGNITION_ELIGIBLE_LABEL = "dapat diakui analitis"
 export const NONASET_RECOGNITION_UNTESTED_LABEL =
-  "belum teruji — bukan angka pengakuan"
+  "belum teruji – bukan angka pengakuan"
 export const NONASET_NEGATIVE_BALANCE_LABEL =
-  "saldo tidak sah — negatif; gagal tertutup bernama (tidak dihitung sebagai temporer)"
+  "saldo tidak sah – negatif; gagal tertutup bernama (tidak dihitung sebagai temporer)"
 export const NONASET_WRITEOFF_INVALID_AMOUNT_LABEL =
-  "hapus-buku jumlah tidak sah — wajib positif terhingga; ditolak tanpa total"
+  "hapus-buku jumlah tidak sah – wajib positif terhingga; ditolak tanpa total"
 export const NONASET_WRITEOFF_NOT_FISCALLY_QUALIFIED_LABEL =
   "hapus-buku tidak memenuhi syarat fiskal"
 export const NONASET_WRITEOFF_REALIZED_LABEL =
-  "hapus-buku memenuhi syarat PMK-105 — temporer tertutup terealisasi fiskal"
+  "hapus-buku memenuhi syarat PMK-105 – temporer tertutup terealisasi fiskal"
 
 export type NonAssetSourceStatus =
   | "computed"
@@ -334,7 +334,7 @@ export function buildDeferredTaxNonAssetSources(input: {
     } else {
       totals.nonQualifiedWriteOff = safeAdd(totals.nonQualifiedWriteOff, wo.amount, 2)
       mutations.push(
-        `${wo.receivableLabel}: ${NONASET_WRITEOFF_NOT_FISCALLY_QUALIFIED_LABEL} ${amount(wo.amount)} — temporer ditutup tanpa manfaat fiskal terealisasi`,
+        `${wo.receivableLabel}: ${NONASET_WRITEOFF_NOT_FISCALLY_QUALIFIED_LABEL} ${amount(wo.amount)} (temporer ditutup tanpa manfaat fiskal terealisasi)`,
       )
     }
   }
@@ -404,13 +404,13 @@ export function buildDeferredTaxNonAssetSources(input: {
     // itu (dilarang agregasi diam-diam / tertimpa Map + sisa ganda).
     if ((yearCounts.get(y.lossYear) ?? 0) > 1) {
       rejected.push(
-        `rugi fiskal ${y.lossYear}: tahun rugi duplikat pada register — semua entri tahun ini ditolak (wajib satu baris per tahun rugi)`,
+        `rugi fiskal ${y.lossYear}: tahun rugi duplikat pada register – semua entri tahun ini ditolak (wajib satu baris per tahun rugi)`,
       )
       continue
     }
     if (!y.signedBy?.trim() || !(y.initialLoss > 0)) {
       rejected.push(
-        `rugi fiskal ${y.lossYear}: register tidak sah (wajib rugi awal positif + penanda tangan bernama) — tidak masuk stok`,
+        `rugi fiskal ${y.lossYear}: register tidak sah (wajib rugi awal positif + penanda tangan bernama) – tidak masuk stok`,
       )
       continue
     }
@@ -456,7 +456,7 @@ export function buildDeferredTaxNonAssetSources(input: {
       if (rem > 0) {
         totals.expiredFiscalLoss = safeAdd(totals.expiredFiscalLoss, rem, 2)
         mutations.push(
-          `rugi fiskal ${y.lossYear}: kedaluwarsa akhir ${expiry} — sisa ${amount(rem)} keluar stok`,
+          `rugi fiskal ${y.lossYear}: kedaluwarsa akhir ${expiry} (sisa ${amount(rem)}) keluar stok`,
         )
       }
       fiscalDetails.push(`rugi ${y.lossYear}: kedaluwarsa ${expiry}, sisa ${amount(rem)} keluar stok`)
@@ -472,7 +472,7 @@ export function buildDeferredTaxNonAssetSources(input: {
         `rugi ${y.lossYear}: awal ${amount(y.initialLoss)}, sisa ${amount(rem)}, kedaluwarsa ${expiry}`,
       )
       if (yearsLeft <= 1) {
-        fiscalDetails.push(`rugi ${y.lossYear}: risiko kedaluwarsa — jendela tersisa ${yearsLeft} tahun`)
+        fiscalDetails.push(`rugi ${y.lossYear}: risiko kedaluwarsa – jendela tersisa ${yearsLeft} tahun`)
       }
     }
   }
@@ -483,7 +483,7 @@ export function buildDeferredTaxNonAssetSources(input: {
         asOfYear <= fiscalLossExpiryYear(y.lossYear) &&
         fiscalLossExpiryYear(y.lossYear) - asOfYear <= 1,
     )
-      ? "risiko kedaluwarsa rugi fiskal — jendela tersisa ≤1 tahun"
+      ? "risiko kedaluwarsa rugi fiskal – jendela tersisa ≤1 tahun"
       : null
   if (input.fiscalLossYears.length === 0) {
     lines.push({
@@ -528,7 +528,7 @@ export function buildDeferredTaxNonAssetSources(input: {
       amount(line.carryingAmount),
       amount(line.taxBase),
       amount(line.deductibleDifference),
-      `${line.detail}${line.expiryRiskLabel ? ` — ${line.expiryRiskLabel}` : ""} · ${line.recognitionLabel}`,
+      `${line.detail}${line.expiryRiskLabel ? `, ${line.expiryRiskLabel}` : ""} · ${line.recognitionLabel}`,
       amount(line.deferredTaxAssetIndication),
     ],
   }))

@@ -172,7 +172,7 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     roots.push(root)
     const text = container.textContent ?? ""
     // Frasa header persis dari payload summary, bukan Σ baris.
-    expect(text).toContain("7 uang muka menunggu verifikasi — Rp 77.000.000 belum menjadi kas")
+    expect(text).toContain("7 uang muka menunggu verifikasi, Rp 77.000.000 belum menjadi kas")
     expect(text).not.toContain("Rp 20.000.000 belum menjadi kas")
     expect(text).not.toContain("Rp 424.242 belum menjadi kas")
     // Sel jumlah baris tetap verbatim payload barisnya.

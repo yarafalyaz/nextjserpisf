@@ -120,7 +120,7 @@ describe("AcceptedQuotationQueueCard F-2026-10-25-002-S", () => {
     expect(text).toContain("Masa Berlaku Lewat")
     expect(text).toContain("Mengendap")
     expect(text).toContain("Menunggu Tindak Lanjut")
-    expect(text).toContain("Pernah Dikonversi — SO Dibatalkan")
+    expect(text).toContain("Pernah Dikonversi – SO Dibatalkan")
     expect(text).toContain(ACCEPTED_QUOTATION_QUEUE_NOTICE_TEXT)
 
     // Baris masa berlaku lewat tetap tampil (AC-AQ-F2) dan urutan builder

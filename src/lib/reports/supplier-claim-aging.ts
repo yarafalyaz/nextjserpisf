@@ -49,8 +49,8 @@ export const SUPPLIER_CLAIM_STATUS_LABELS: Record<string, string> = {
   accepted: "Diterima supplier",
   rejected_supplier: "Ditolak supplier",
   returned: "Part sudah diretur",
-  closed_recovered: "Tutup — recovery diterima",
-  closed_no_recovery: "Tutup — tanpa recovery",
+  closed_recovered: "Tutup – recovery diterima",
+  closed_no_recovery: "Tutup – tanpa recovery",
 }
 
 export const SUPPLIER_CLAIM_AGING_NO_DATE_LABEL = "Tanpa tanggal klaim supplier"

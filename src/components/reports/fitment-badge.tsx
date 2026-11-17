@@ -66,7 +66,7 @@ export function FitmentIncompatibleSummary({
       <TriangleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
       <span>
         {incompatibleCount} baris tidak cocok untuk kendaraan ini. Periksa
-        lencana pada tiap baris — dokumen tetap dapat dilanjutkan.
+        lencana pada tiap baris, dokumen tetap dapat dilanjutkan.
       </span>
     </p>
   )

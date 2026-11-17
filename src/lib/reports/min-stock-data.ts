@@ -25,7 +25,7 @@ import { effectiveMinStock, minStockOverrideByPair } from "@/lib/reports/min-sto
  * MIN_STOCK_OVERRIDE_LABEL. Frontend tempel verbatim; jangan parafrase.
  */
 export const MIN_STOCK_WAREHOUSE_NOTE =
-  "Per gudang: minimum masih global — batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
+  "Per gudang: minimum masih global – batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
 
 /** Label sumber untuk baris dengan override per gudang (BR-MS-04). */
 export const MIN_STOCK_OVERRIDE_LABEL = "Minimum per gudang"

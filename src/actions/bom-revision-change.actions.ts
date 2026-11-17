@@ -364,7 +364,7 @@ export async function decideBomRevisionChange(input: {
         throw new Error("Revisi BOM tujuan untuk produk berbeda; ganti revisi hanya dalam produk yang sama.")
       }
       if (toRevisionLocked.status !== "released") {
-        throw new Error("Revisi BOM tujuan tidak lagi berstatus released; pin tidak dapat diganti — ajukan ulang dengan revisi tujuan yang dirilis.")
+        throw new Error("Revisi BOM tujuan tidak lagi berstatus released; pin tidak dapat diganti – ajukan ulang dengan revisi tujuan yang dirilis.")
       }
       // Pin diganti dalam transaksi persetujuan yang sama (BR-BOM68-06).
       if (owner === "wo") {

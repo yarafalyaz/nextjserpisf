@@ -32,7 +32,7 @@ export type OvertimeRecapStatus = (typeof OVERTIME_RECAP_STATUSES)[number]
 
 /** Label definisi jam BR-OVR-03 verbatim untuk UI (AC-OVR-F1). */
 export const OVERTIME_RECAP_NOTICE =
-  "Rekap jam lembur operasional — bukan dasar pembayaran; nilai lembur " +
+  "Rekap jam lembur operasional – bukan dasar pembayaran; nilai lembur " +
   "tetap dihitung payroll dari nilai tersimpan saat persetujuan."
 
 export const OVERTIME_RECAP_NO_PROJECT_LABEL = "Tanpa proyek"

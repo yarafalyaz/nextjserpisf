@@ -64,14 +64,14 @@ describe("BomRevisionImpactCard F-2026-10-22-068-S AC-BOM68-8", () => {
       [...r.querySelectorAll("td")].map((c) => (c.textContent ?? "").trim()),
     )
     expect(rows).toEqual([
-      ["WO-001", "Dalam Proses", "3", "4", "1", "Sudah ter-issue — terkunci"],
+      ["WO-001", "Dalam Proses", "3", "4", "1", "Sudah ter-issue, terkunci"],
       ["WO-002", "Konsep", "0", "4", "0", "Belum ada material keluar"],
     ])
-    expect(text).toContain("Sudah ter-issue — terkunci")
+    expect(text).toContain("Sudah ter-issue, terkunci")
     expect(text).toContain("WO-002")
     expect(text).toContain("Belum ada material keluar")
     // tepat satu label terkunci (hanya WO-001)
-    expect(text.split("Sudah ter-issue — terkunci").length - 1).toBe(1)
+    expect(text.split("Sudah ter-issue, terkunci").length - 1).toBe(1)
     // ringkasan verbatim builder
     expect(text).toContain("1 perintah kerja sudah punya material keluar")
     expect(text).toContain("2 order produksi memakai revisi ini")

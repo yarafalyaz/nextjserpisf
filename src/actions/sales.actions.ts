@@ -363,7 +363,7 @@ export async function createQuotation(formData: FormData) {
     // cakupan garansinya. Customer/item di jalur ini sudah digerbang
     // hidup; kendaraan sebelumnya hanya dinilai kepemilikannya.
     if (!vehicle.isActive || vehicle.deletedAt != null) {
-      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus – pilih kendaraan aktif.")
     }
   }
 
@@ -392,7 +392,7 @@ export async function createQuotation(formData: FormData) {
         throw new Error("Kendaraan tidak terdaftar untuk customer ini")
       }
       if (!vehicle.isActive || vehicle.deletedAt != null) {
-        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus – pilih kendaraan aktif.")
       }
     }
     // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
@@ -600,7 +600,7 @@ export async function rejectQuotation(quotationId: number, reason?: string) {
       action: "rejected",
       verb: "ditolak",
       ...(cleanReason
-        ? { description: `Penawaran ditolak oleh pelanggan (revisi v${quotation.revisionNumber}) — Alasan: ${cleanReason}` }
+        ? { description: `Penawaran ditolak oleh pelanggan (revisi v${quotation.revisionNumber}) – Alasan: ${cleanReason}` }
         : {}),
     },
     quotation.revisionNumber,
@@ -667,7 +667,7 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
         dataSnapshot: snapshot,
         changeReason: cleanReason,
         action: "revised",
-        description: `Revisi #${locked.revisionNumber ?? quotation.revisionNumber} — ${cleanReason}`,
+        description: `Revisi #${locked.revisionNumber ?? quotation.revisionNumber} – ${cleanReason}`,
         userId: Number(user.id),
       },
     })
@@ -884,7 +884,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     }
     // Putaran 64: gerbang hidup sama dengan createQuotation.
     if (!vehicle.isActive || vehicle.deletedAt != null) {
-      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+      throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus – pilih kendaraan aktif.")
     }
   }
 
@@ -954,7 +954,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         throw new Error("Kendaraan tidak terdaftar untuk customer ini")
       }
       if (!vehicle.isActive || vehicle.deletedAt != null) {
-        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus — pilih kendaraan aktif.")
+        throw new Error("Kendaraan pelanggan tidak aktif atau sudah dihapus – pilih kendaraan aktif.")
       }
     }
 
@@ -1225,7 +1225,7 @@ export async function allocateCustomerCredit(creditId: number, salesInvoiceId: n
       const r = await reportPostCommitAuditFailure("allocate", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
       // Penanda dikonsumsi: kegagalan jejak MUNCUL di respons (warning),
       // bukan hilang. Transaksi uang tetap sah.
-      if (!r.auditPersisted) auditWarning = "Alokasi sah, tetapi jejak audit gagal dicatat — hubungi admin.";
+      if (!r.auditPersisted) auditWarning = "Alokasi sah, tetapi jejak audit gagal dicatat – hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
     // AUD-R7-03: bedakan operasi baru vs replay retry (UI tampilkan bukti ID).
@@ -1252,7 +1252,7 @@ export async function refundCustomerCredit(creditId: number, amount: number, ide
       await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
     } catch (e) {
       const r = await reportPostCommitAuditFailure("refund", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
-      if (!r.auditPersisted) refundAuditWarning = "Refund sah, tetapi jejak audit gagal dicatat — hubungi admin.";
+      if (!r.auditPersisted) refundAuditWarning = "Refund sah, tetapi jejak audit gagal dicatat – hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
     return { success: true as const, warning: refundAuditWarning, replayed: result.replayed === true, journalId: result.journalId };
@@ -2745,7 +2745,7 @@ export async function completeSalesReturn(returnId: number) {
   }
 
   if (salesReturn.createdBy != null && Number(salesReturn.createdBy) === Number(user.id)) {
-    throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_sales_returns.")
+    throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_sales_returns.")
   }
 
   // P1-1: identitas fisik wajib untuk item tracked. Tanpa serial/batch
@@ -2770,7 +2770,7 @@ export async function completeSalesReturn(returnId: number) {
         throw new Error(`Item #${it.itemId} melacak nomor seri: jumlah nomor seri (${serials}) tidak sama dengan qty retur (${Math.round(Number(it.qty))}).`)
       }
       if (t.trackBatch && batches === 0) {
-        throw new Error(`Item #${it.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`)
+        throw new Error(`Item #${it.itemId} memakai pelacakan batch – sebutkan nomor batch yang benar-benar kembali.`)
       }
     }
   }
@@ -2790,7 +2790,7 @@ export async function completeSalesReturn(returnId: number) {
         select: { status: true },
       })
       if (!invoice || invoice.status === "cancelled") {
-        throw new Error("Faktur asal retur sudah dibatalkan — retur tidak bisa diselesaikan.")
+        throw new Error("Faktur asal retur sudah dibatalkan – retur tidak bisa diselesaikan.")
       }
     }
     // STOK-10: klaim status di DALAM transaksi — snapshot action di luar
@@ -2877,7 +2877,7 @@ function parseSalesReturnItems(itemsJson: string | null | undefined): SalesRetur
     if (itemId === null || itemId <= 0) continue;
     const qty = parseLocaleNumber(row.qty as string | number | null | undefined);
     if (qty === null) {
-      throw new Error(`Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`);
+      throw new Error(`Kuantitas retur item #${itemId} tidak valid – isi angka lebih dari 0 (mis. 2 atau 2.000).`);
     }
     if (qty <= 0) continue;
     items.push({
@@ -3296,7 +3296,7 @@ export async function shipDeliveryOrder(id: number) {
     })
     if (existing.status !== "draft") {
       throw new Error(
-        `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — hanya surat jalan konsep yang bisa ditandai dikirim.`,
+        `Surat jalan ${existing.documentNo} berstatus "${existing.status}" – hanya surat jalan konsep yang bisa ditandai dikirim.`,
       )
     }
 
@@ -3366,7 +3366,7 @@ export async function deliverDeliveryOrder(id: number) {
   })
   if (existing.status !== "shipped") {
     throw new Error(
-      `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — tandai dikirim dulu sebelum ditandai terkirim.`,
+      `Surat jalan ${existing.documentNo} berstatus "${existing.status}" – tandai dikirim dulu sebelum ditandai terkirim.`,
     )
   }
 
@@ -5258,7 +5258,7 @@ export async function voidSalesInvoice(id: number) {
       where: { salesInvoiceId: id, status: { in: ["draft", "completed"] } },
     })
     if (blockingReturns > 0) {
-      throw new Error("Faktur memiliki retur penjualan draft/selesai — selesaikan atau batalkan retur terlebih dahulu sebelum membatalkan faktur.")
+      throw new Error("Faktur memiliki retur penjualan draft/selesai – selesaikan atau batalkan retur terlebih dahulu sebelum membatalkan faktur.")
     }
 
     await reverseSalesInvoicePostingTx(tx, id)

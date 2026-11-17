@@ -552,7 +552,7 @@ export default async function QuotationDetailPage({
                       >
                         <div>
                           <strong className="capitalize">{item.action}</strong>
-                          {item.description ? ` — ${item.description}` : ""}
+                          {item.description ? `, ${item.description}` : ""}
                           {item.userName ? (
                             <span className="text-muted-foreground ml-2 text-xs">
                               oleh <span className="font-medium text-foreground">{item.userName}</span>

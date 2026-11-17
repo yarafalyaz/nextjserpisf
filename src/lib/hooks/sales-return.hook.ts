@@ -63,7 +63,7 @@ export async function onSalesReturnCompleted(
           isScrapReturn = true;
         } else if (scrapCount > 0) {
           throw new Error(
-            "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang — " +
+            "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang, " +
               "pendapatan besi tua masuk akun lain-lain dan nilai bukunya Rp0.",
           );
         }
@@ -196,7 +196,7 @@ export async function onSalesReturnCompleted(
         const rowBatches = toCleanStrings(item.batchNumbers);
         if (trackBatchByItem.get(item.itemId) && rowBatches.length === 0) {
           throw new Error(
-            `Item #${item.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`,
+            `Item #${item.itemId} memakai pelacakan batch, sebutkan nomor batch yang benar-benar kembali.`,
           );
         }
         const rowSerials = toCleanStrings(item.serialNumbers);

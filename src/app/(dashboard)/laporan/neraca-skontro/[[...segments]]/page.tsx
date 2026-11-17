@@ -85,7 +85,7 @@ export default async function SkontroBalanceSheetPage({
         tableLabel="Neraca Skontro"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        Bentuk skontro menyandingkan Aktiva (kiri) dengan Pasiva — kewajiban dan ekuitas — (kanan).
+        Bentuk skontro menyandingkan Aktiva (kiri) dengan Pasiva, kewajiban dan ekuitas, (kanan).
         Baris yang tidak punya pasangan dibiarkan kosong; kedua sisi tetap harus sama pada baris
         Jumlah.
       </p>

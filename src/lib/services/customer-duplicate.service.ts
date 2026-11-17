@@ -39,9 +39,9 @@ import { normalizeWhatsappPhone } from "@/lib/utils/whatsapp";
 
 export const CUSTOMER_DUPLICATE_WARNING_TITLE = "Kemungkinan pelanggan ganda";
 export const CUSTOMER_DUPLICATE_WARNING_BODY =
-  "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu — pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master.";
+  "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu, pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master.";
 export const CUSTOMER_REUSED_MESSAGE =
-  "Pelanggan sudah ada — data lama dipakai kembali, tidak dibuat ganda.";
+  "Pelanggan sudah ada, data lama dipakai kembali, tidak dibuat ganda.";
 
 export const MAX_CANDIDATE_SCAN = 2000;
 

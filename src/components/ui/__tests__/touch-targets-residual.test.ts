@@ -32,9 +32,9 @@ describe("residual target sentuh 44px", () => {
     expect(src).toContain('"min-h-11"')
   })
 
-  it("status-actions: Setujui/Tolak min-h-11, pill pakai StatusChip", () => {
+  it("status-actions: Setujui/Tolak min-h-11 lalu sm:min-h-9, pill pakai StatusChip", () => {
     const src = source("src/components/ui/status-actions.tsx")
-    expect(src.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(src.match(/className="min-h-11 sm:min-h-9"/g)?.length).toBe(2)
     expect(src).toContain("<StatusChip status={status} />")
     expect(src).not.toMatch(/text-\w+-600/)
     expect(src).not.toMatch(/bg-\w+\/20/)
@@ -43,6 +43,27 @@ describe("residual target sentuh 44px", () => {
   it("void-button: Batalkan min-h-11", () => {
     const src = source("src/components/ui/void-button.tsx")
     expect(src).toMatch(/min-h-11/)
+  })
+
+  it("delete-button: Hapus icon-only min-h-11 min-w-11 lalu sm:min-h-9", () => {
+    const src = source("src/components/ui/delete-button.tsx")
+    expect(src).toContain('className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9"')
+  })
+
+  it("form-attachment-upload: tombol hapus ber-::before -inset-2, tombol upload min-h-11", () => {
+    const src = source("src/components/ui/form-attachment-upload.tsx")
+    expect(src).toContain("before:absolute before:-inset-2 before:content-['']")
+    expect(src).toContain('className="form-attachment-upload-btn min-h-11"')
+  })
+
+  it("transaction-attachments: unduh/hapus/upload min-h-11", () => {
+    const src = source("src/components/ui/transaction-attachments.tsx")
+    expect(src.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it("invoice-items-editor: hapus baris min-h-11 lalu sm:min-h-9", () => {
+    const src = source("src/components/ui/invoice-items-editor.tsx")
+    expect(src).toContain("min-h-11 px-2 text-danger hover:text-danger/80 sm:min-h-9")
   })
 
   it("data-table: sort bawa perluasan ::before; id pageSize unik per instance (useId)", () => {

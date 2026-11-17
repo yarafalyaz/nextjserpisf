@@ -257,7 +257,7 @@ export function JobPaymentScheduleCard({
           ) : nextTerm ? (
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <p className="text-sm text-muted-foreground">
-                Termin berikutnya: <span className="font-medium text-foreground">{nextTerm.name}</span> — target kumulatif{" "}
+                Termin berikutnya: <span className="font-medium text-foreground">{nextTerm.name}</span>, target kumulatif{" "}
                 {formatPercentage(nextTerm.cumulativePercent, 1)} ({formatCurrencyExact(nextTerm.targetAmount)})
               </p>
               <Button

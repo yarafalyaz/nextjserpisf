@@ -201,7 +201,7 @@ export function CreditOverrideQueue({
               <div className="flex min-w-56 flex-col gap-2">
                 {isOwn ? (
                   <p className="text-xs text-muted-foreground">
-                    Permintaan Anda sendiri — pemisahan tugas ditegakkan server.
+                    Permintaan Anda sendiri, pemisahan tugas ditegakkan server.
                   </p>
                 ) : null}
                 <div>

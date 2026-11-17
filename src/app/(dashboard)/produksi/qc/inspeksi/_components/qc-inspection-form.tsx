@@ -221,7 +221,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
       if (result?.status === "failed") {
         showSuccess(
           ncrCount > 0
-            ? `Inspeksi dicatat: GAGAL — ${ncrCount} NCR dibuat otomatis`
+            ? `Inspeksi dicatat: GAGAL, ${ncrCount} NCR dibuat otomatis`
             : "Inspeksi dicatat: GAGAL",
         )
       } else {

@@ -42,13 +42,13 @@ export function buildAdvanceJournalEntries(input: {
       accountId: advanceAccountId,
       debit: amount,
       credit: 0,
-      memo: `Uang muka pembelian ${documentNo} — ${vendorName}`,
+      memo: `Uang muka pembelian ${documentNo} – ${vendorName}`,
     },
     {
       accountId: paymentAccountId,
       debit: 0,
       credit: amount,
-      memo: `Pembayaran uang muka ${documentNo} — ${vendorName}`,
+      memo: `Pembayaran uang muka ${documentNo} – ${vendorName}`,
     },
   ]
 }
@@ -88,7 +88,7 @@ export function buildAdvanceListing(lines: AdvanceReportLine[]): AdvanceReportRe
     ],
     emptyNotice: "Tidak ada uang muka pembelian pada periode ini.",
     verdictNotice:
-      "Angka ini adalah uang muka yang **dibayarkan** pada periode, bukan saldo yang belum terpakai — " +
+      "Angka ini adalah uang muka yang **dibayarkan** pada periode, bukan saldo yang belum terpakai – " +
       "penerapan uang muka ke tagihan vendor belum diotomatiskan.",
     emptyVerdict: "Tidak ada uang muka pembelian pada periode ini",
     verdict: (count, amount) => `${count} uang muka · total dibayar ${formatCurrency(amount)}`,

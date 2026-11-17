@@ -94,7 +94,7 @@ describe("PurchaseOrderDraftQueueCard 060-F AC-POQ-F1..F3", () => {
     ])
     for (const expected of [
       PURCHASE_ORDER_DRAFT_NOTICE_TEXT,
-      "1 mengendap · 1 menunggu persetujuan · 2 pesanan draft — Rp 2.000.000 nilai draft belum disetujui",
+      "1 mengendap · 1 menunggu persetujuan · 2 pesanan draft, Rp 2.000.000 nilai draft belum disetujui",
       "Mengendap: 1",
       "Menunggu Persetujuan: 1",
       "Mengendap",

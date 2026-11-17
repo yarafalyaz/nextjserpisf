@@ -62,11 +62,11 @@ function claim(overrides: Partial<ReimbursementQueueClaimInput> = {}): Reimburse
 describe("reimbursement-queue (F-2026-10-27-082-S + 083-V)", () => {
   it("kata verbatim Q-RBQ-2 + larangan field 083-V", () => {
     expect(REIMBURSEMENT_QUEUE_STALE_DAYS).toBe(3)
-    expect(REIMBURSEMENT_QUEUE_TITLE).toBe("Reimbursement Disetujui — Menunggu Pembayaran")
+    expect(REIMBURSEMENT_QUEUE_TITLE).toBe("Reimbursement Disetujui – Menunggu Pembayaran")
     expect(REIMBURSEMENT_QUEUE_NOTICE_TEXT).toContain("bukan saldo utang atau aging")
     expect(REIMBURSEMENT_QUEUE_PAID_WITHOUT_JOURNAL_LABEL).toBe("Status terbaca dibayar tanpa fakta jurnal")
     expect(REIMBURSEMENT_QUEUE_NO_ACCRUAL_LABEL).toBe("tanpa jurnal akrual")
-    expect(REIMBURSEMENT_QUEUE_TOTAL_LABEL).toBe("total nominal tersimpan baris tampil — bukan saldo buku")
+    expect(REIMBURSEMENT_QUEUE_TOTAL_LABEL).toBe("total nominal tersimpan baris tampil – bukan saldo buku")
     expect(REIMBURSEMENT_QUEUE_LEVEL_LABELS).toEqual({ mengendap: "Mengendap", menunggu: "Menunggu" })
     const queue = buildReimbursementQueue([claim()], NOW)
     const keys = Object.keys(queue.rows[0])

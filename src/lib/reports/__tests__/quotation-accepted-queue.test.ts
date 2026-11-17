@@ -76,7 +76,7 @@ describe("quotation-accepted-queue builder (F-2026-10-25-002-S)", () => {
       MASA_BERLAKU_LEWAT: "Masa Berlaku Lewat",
       MENGENDAP: "Mengendap",
       MENUNGGU_TINDAK_LANJUT: "Menunggu Tindak Lanjut",
-      PERNAH_DIKONVERSI_SO_BATAL: "Pernah Dikonversi — SO Dibatalkan",
+      PERNAH_DIKONVERSI_SO_BATAL: "Pernah Dikonversi – SO Dibatalkan",
     })
     expect(ACCEPTED_QUOTATION_AGE_UNRECORDED_LABEL).toBe("tidak tercatat")
     expect(ACCEPTED_QUOTATION_QUEUE_NOTICE_TEXT).toBe(
@@ -126,7 +126,7 @@ describe("quotation-accepted-queue builder (F-2026-10-25-002-S)", () => {
       NOW,
     )
     expect(row.tahap).toBe("PERNAH_DIKONVERSI_SO_BATAL")
-    expect(row.tahapLabel).toBe("Pernah Dikonversi — SO Dibatalkan")
+    expect(row.tahapLabel).toBe("Pernah Dikonversi – SO Dibatalkan")
     expect(row.pernahDikonversiSoBatal).toBe(true)
     expect(row.punyaSoAktif).toBe(false)
   })

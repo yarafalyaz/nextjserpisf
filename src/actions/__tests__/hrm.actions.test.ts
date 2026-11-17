@@ -3156,7 +3156,7 @@ describe("Absensi Actions", () => {
 
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toBe(
-      "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
+      "Karyawan ini belum punya jadwal kerja aktif, buat jadwal kerja lebih dulu " +
         "supaya keterlambatan bisa dihitung dari jam masuk.",
     )
     // Kesalahan senyap yang mencatat 0 keterlambatan justru yang harus dicegah.
@@ -3222,7 +3222,7 @@ describe("Absensi Actions", () => {
 
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toBe(
-      "Absensi karyawan untuk tanggal itu sudah ada — ubah yang sudah tercatat.",
+      "Absensi karyawan untuk tanggal itu sudah ada, ubah yang sudah tercatat.",
     )
   })
 

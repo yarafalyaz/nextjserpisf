@@ -36,7 +36,7 @@ describe("DeferredTaxNonAssetCard F-2026-10-23-126-V", () => {
     expect(text).toContain(NONASET_CKPN_UNAVAILABLE_LABEL)
     expect(text).toContain(NONASET_FISCAL_LOSS_UNAVAILABLE_LABEL)
     expect(text).toContain(NONASET_RECOGNITION_UNTESTED_LABEL)
-    expect(text).toContain("tarif pasokan operator — bukan master")
+    expect(text).toContain("tarif pasokan operator – bukan master")
     expect(text).toContain(DEFERRED_TAX_NOTICE)
     expect(text).toContain(report.verdict)
     expect(container.querySelector("button")).toBeNull()
@@ -64,7 +64,7 @@ describe("DeferredTaxNonAssetCard F-2026-10-23-126-V", () => {
     const text = container.textContent ?? ""
     // Indikasi per builder: (10jt + 50jt) x 22%, tampil dari totals verbatim.
     expect(text).toContain("indikasi aset Rp 13.200.000")
-    expect(text).toContain("risiko kedaluwarsa rugi fiskal — jendela tersisa ≤1 tahun")
+    expect(text).toContain("risiko kedaluwarsa rugi fiskal – jendela tersisa ≤1 tahun")
     expect(text).toContain("rugi 2022: awal 50.000.000")
     expect(text).toContain("Provisi garansi")
     expect(text).toContain("Akumulasi rugi fiskal")

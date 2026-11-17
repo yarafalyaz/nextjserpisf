@@ -152,7 +152,7 @@ export default async function GeneralLedgerPage({
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
 
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
-  const ledgerSubtitle = selectedAccount ? `${selectedAccount.code} – ${selectedAccount.name}` : undefined
+  const ledgerSubtitle = selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : undefined
 
   const filterNode = (
     <ReportPeriodFilter
@@ -197,7 +197,7 @@ export default async function GeneralLedgerPage({
                 href={`/laporan/buku-besar/${period.slug}/akun/${acc.slug ?? acc.id}`}
                 className="text-xs px-3 py-1.5 rounded-lg border border-default bg-surface hover:bg-surface-secondary text-foreground transition-colors font-medium"
               >
-                {acc.code} — {acc.name}
+                {acc.code} – {acc.name}
               </Link>
             ))}
           </div>

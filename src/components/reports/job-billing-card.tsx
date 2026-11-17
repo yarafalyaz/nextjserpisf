@@ -88,7 +88,7 @@ export function JobBillingCard({
           <dl className="mt-1 divide-y divide-default">
             <div className="flex items-center justify-between gap-4 py-1.5">
               <dt className="text-sm text-muted-foreground">
-                {terminDelta.naik ? "Nilai naik — sisa tagih bertambah" : "Nilai turun — kelebihan menjadi kredit pelanggan"}
+                {terminDelta.naik ? "Nilai naik – sisa tagih bertambah" : "Nilai turun – kelebihan menjadi kredit pelanggan"}
               </dt>
               <dd
                 className={

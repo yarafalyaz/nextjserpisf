@@ -82,7 +82,7 @@ export function PermissionMatrix({
 
       {missingPermissionKeys.length > 0 && (
         <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
-          <strong>{missingPermissionKeys.length} izin belum ada di database</strong> — matriks di
+          <strong>{missingPermissionKeys.length} izin belum ada di database</strong>, matriks di
           bawah menampilkannya tanpa kotak centang sampai katalog di-seed
           (<code className="font-mono text-xs">npm run db:seed</code>). Contoh:{" "}
           <span className="font-mono text-xs">{missingPermissionKeys.slice(0, 3).join(", ")}</span>
@@ -192,7 +192,7 @@ export function PermissionMatrix({
                                 checked={checked.has(id)}
                                 onChange={(e) => toggle(id, e.target.checked)}
                                 className="size-4 accent-primary"
-                                aria-label={`${row.label} — ${permissionGroupLabel(verb)}`}
+                                aria-label={`${row.label} - ${permissionGroupLabel(verb)}`}
                                 title={permissionLabel(cell.permissionKey)}
                               />
                             </td>

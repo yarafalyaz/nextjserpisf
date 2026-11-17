@@ -90,11 +90,11 @@ describe("WarrantyJournalPanel — rute provisi MATI E2+E3", () => {
       <WarrantyJournalPanel facts={facts({ supplierClaimStatus: "sent" })} canPost={true} />,
     )
     expect(container.textContent).toContain(
-      "Mode provisi: MATI — biaya klaim dibebankan saat terjadi (510104), tanpa akrual provisi.",
+      "Mode provisi: MATI, biaya klaim dibebankan saat terjadi (510104), tanpa akrual provisi.",
     )
     expect(container.textContent).toContain("BELUM DIPOSTING")
     expect(container.textContent).toContain(
-      "Recovery belum hampir pasti — tanpa jurnal (aset kontinjensi, PSAK 57).",
+      "Recovery belum hampir pasti, tanpa jurnal (aset kontinjensi, PSAK 57).",
     )
     // AC-B2-5: tidak ada teks terlarang
     expect(container.textContent?.toLowerCase()).not.toContain("deductible")
@@ -136,7 +136,7 @@ describe("WarrantyJournalPanel — rute provisi MATI E2+E3", () => {
       />,
     )
     expect(container.textContent).toContain("BELUM DIPOSTING")
-    expect(container.textContent).toContain("dibalik — lihat jurnal lawan")
+    expect(container.textContent).toContain("dibalik, lihat jurnal lawan")
     expect(container.textContent).toContain("JRN-0010")
     act(() => root.unmount())
   })
@@ -185,7 +185,7 @@ describe("WarrantyJournalPanel — rute provisi MATI E2+E3", () => {
 
   it("E130-1: penolakan recovery server tampil verbatim lewat toast error", async () => {
     const verbatim =
-      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup."
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada, unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup."
     recoveryMock.mockClear()
     errorMock.mockClear()
     successMock.mockClear()

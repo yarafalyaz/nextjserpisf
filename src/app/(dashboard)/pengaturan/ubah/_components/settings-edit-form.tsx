@@ -619,7 +619,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                   ]}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Status PKP perusahaan sendiri — bukan status PKP pelanggan. Selama belum ditetapkan, uang muka ber-PPN ditolak server.
+                  Status PKP perusahaan sendiri, bukan status PKP pelanggan. Selama belum ditetapkan, uang muka ber-PPN ditolak server.
                 </p>
               </div>
               <AppDatePicker

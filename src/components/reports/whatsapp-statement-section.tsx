@@ -63,7 +63,7 @@ export function WhatsappStatementSection({
         <ul aria-label="Riwayat tautan WhatsApp dibuka" className="flex flex-col gap-1 text-sm text-muted-foreground">
           {whatsappTrail.map((entry, index) => (
             <li key={`${entry.createdAt.toISOString()}-${index}`}>
-              Tautan WhatsApp dibuka — {formatDate(entry.createdAt, { includeTime: true })} WIB oleh{" "}
+              Tautan WhatsApp dibuka: {formatDate(entry.createdAt, { includeTime: true })} WIB oleh{" "}
               {entry.userName ?? "Pengguna"}
             </li>
           ))}

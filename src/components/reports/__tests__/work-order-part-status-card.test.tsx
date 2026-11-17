@@ -34,7 +34,7 @@ describe("WorkOrderPartStatusCard F-2026-10-20-105", () => {
     expect(text).toContain("Ganti oli")
     expect(text).toContain("Terpasang")
     expect(text).toContain("Dipesan")
-    expect(text).toContain("Jasa — tak-tertaut")
+    expect(text).toContain("Jasa – tak-tertaut")
     expect(text).toContain("Ringkasan Status")
     // notice backend tampil apa adanya, bukan dihitung ulang
     expect(text).toContain("Retur pembelian tidak tertaut per baris perintah kerja")

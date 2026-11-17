@@ -427,7 +427,7 @@ export async function deleteVehicleVariant(id: number) {
       const inUseCount = outcome.vehicleCount + outcome.ruleCount;
       return {
         success: false,
-        error: `Tidak bisa menghapus varian — masih dipakai oleh ${inUseCount} data (kendaraan: ${outcome.vehicleCount}, aturan kompatibilitas: ${outcome.ruleCount}).`,
+        error: `Tidak bisa menghapus varian – masih dipakai oleh ${inUseCount} data (kendaraan: ${outcome.vehicleCount}, aturan kompatibilitas: ${outcome.ruleCount}).`,
       };
     }
     const variant = outcome.variant;

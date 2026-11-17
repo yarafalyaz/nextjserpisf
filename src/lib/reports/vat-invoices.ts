@@ -192,7 +192,7 @@ function dataRows(items: VatInvoiceInput[]): TableRow[] {
         text:
           `Peringatan: faktur ${item.documentNo ?? "–"} punya retur terproses ${item.returnRef.documentNo}` +
           (item.returnRef.sourceDocumentNo ? ` atas ${item.returnRef.sourceDocumentNo}` : "") +
-          `. Angka DPP/PPN retur belum mengurangi laporan ini — nota retur mengurangi ` +
+          `. Angka DPP/PPN retur belum mengurangi laporan ini – nota retur mengurangi ` +
           `PPN pada masa retur, menunggu vonis masa & dasar hitung.`,
       })
     }

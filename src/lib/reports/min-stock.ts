@@ -194,14 +194,14 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
       kind: "notice",
       text:
         "Belum ada satu pun barang yang diisi batas minimum stoknya, jadi laporan ini belum bisa menilai apa pun. " +
-        "Isi kolom \"Stok Minimum\" pada master barang lebih dulu — daftar yang kosong di sini berarti belum " +
+        "Isi kolom \"Stok Minimum\" pada master barang lebih dulu – daftar yang kosong di sini berarti belum " +
         "dinilai, bukan berarti semua stok aman.",
     })
   } else if (below.length === 0) {
     verdict = "Tidak ada barang yang mencapai batas minimum."
     rows.push({
       kind: "notice",
-      text: "Semua barang yang punya batas minimum masih di atas batasnya — tidak ada yang perlu dibeli.",
+      text: "Semua barang yang punya batas minimum masih di atas batasnya – tidak ada yang perlu dibeli.",
     })
   } else {
     verdict = `${below.length} barang mencapai/menembus batas minimum, ${totals.outOfStock} di antaranya habis.`
@@ -234,7 +234,7 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
     rows.push({
       kind: "notice",
       text:
-        "Periode ini memuat lebih dari satu satuan, jadi kolom jumlah TIDAK dijumlahkan — hanya kolom nilai yang " +
+        "Periode ini memuat lebih dari satu satuan, jadi kolom jumlah TIDAK dijumlahkan – hanya kolom nilai yang " +
         "bertotal.",
     })
   }

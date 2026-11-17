@@ -135,7 +135,7 @@ export default async function VendorBillDetailPage({
           <ReceiptText aria-hidden="true" />
           <AlertTitle>PPN digabung ke HPP</AlertTitle>
           <AlertDescription>
-            Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.
+            Nomor faktur pajak belum diisi, PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.
           </AlertDescription>
         </Alert>
       )}
@@ -144,7 +144,7 @@ export default async function VendorBillDetailPage({
           tombol itu hanya membalik status ke approved tanpa jurnal dan
           tanpa balanceDue, sementara Konfirmasi di header memposting dari
           draft langsung. Sesudah "disetujui" generik, Konfirmasi hilang
-          (draft-only) dan Bayar terkunci (balanceDue masih 0) — tagihan
+          (draft-only) dan Bayar terkunci (balanceDue masih 0), tagihan
           terkunci permanen. Status cukup tampil sebagai badge di header. */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">

@@ -233,7 +233,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           </DetailTable>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Aktual per tahap belum terukur — kolom tahap belum ada di sumber biaya (pengeluaran material/beban hanya berkolom proyek, biaya produksi tanpa kolom proyek/tahap), sehingga seluruh aktual {formatCurrencyExact(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
+            Aktual per tahap belum terukur, kolom tahap belum ada di sumber biaya (pengeluaran material/beban hanya berkolom proyek, biaya produksi tanpa kolom proyek/tahap), sehingga seluruh aktual {formatCurrencyExact(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
           </p>
         </section>
       )}

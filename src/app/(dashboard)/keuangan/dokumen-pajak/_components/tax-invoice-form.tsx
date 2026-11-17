@@ -144,7 +144,7 @@ export function TaxInvoiceForm({
           <div className="flex min-h-11 items-center gap-2 sm:col-span-2">
             <input id="legacy15Confirmed" name="legacy15Confirmed" type="checkbox" value="true" className="size-4 shrink-0 rounded border-default text-primary focus:ring-primary" />
             <Label htmlFor="legacy15Confirmed" className="font-normal cursor-pointer">
-              NPWP lawan 15 digit (legacy) — saya konfirmasi terbit tetap dilanjutkan dengan NPWP 15 digit
+              NPWP lawan 15 digit (legacy), saya konfirmasi terbit tetap dilanjutkan dengan NPWP 15 digit
             </Label>
           </div>
         ) : null}

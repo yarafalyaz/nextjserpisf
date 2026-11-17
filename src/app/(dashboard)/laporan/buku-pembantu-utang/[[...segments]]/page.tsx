@@ -74,7 +74,7 @@ export default async function PayableSubledgerPage({
               value: selected ? (selected.slug ?? String(selected.id)) : "",
               options: vendors.map((p) => ({
                 value: p.slug ?? String(p.id),
-                label: `${p.code ? `${p.code} — ` : ""}${p.name}`,
+                label: `${p.code ? `${p.code}, ` : ""}${p.name}`,
               })),
             },
           ]}

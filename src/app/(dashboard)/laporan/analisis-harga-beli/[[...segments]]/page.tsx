@@ -88,7 +88,7 @@ export default async function PurchasePriceAnalysisPage({
             label: "Barang",
             placeholder: "Cari barang (SKU / nama)...",
             value: itemKey ?? "",
-            options: items.map((i) => ({ value: i.slug ?? String(i.id), label: `${i.sku} — ${i.name}` })),
+            options: items.map((i) => ({ value: i.slug ?? String(i.id), label: `${i.sku} - ${i.name}` })),
           },
         ]}
       />
@@ -99,7 +99,7 @@ export default async function PurchasePriceAnalysisPage({
 
 
       <ReportLetterhead title="Analisis Harga Beli Multi-Sumber" subtitle="Perbandingan Harga Beli Antar Pemasok" periodLabel={periodLabel} />
-      <ReportNarration text="Analisis ini membandingkan biaya perolehan efektif barang yang sama antar pemasok dan antar waktu, berdasarkan penerimaan barang (GRN) yang sudah diposting. Harga daftar yang murah belum tentu biaya perolehan termurah setelah ongkir, diskon, dan biaya lain — karena itu perbandingan didasarkan pada biaya perolehan per satuan, bukan harga daftar saja (PUR-08)." />
+      <ReportNarration text="Analisis ini membandingkan biaya perolehan efektif barang yang sama antar pemasok dan antar waktu, berdasarkan penerimaan barang (GRN) yang sudah diposting. Harga daftar yang murah belum tentu biaya perolehan termurah setelah ongkir, diskon, dan biaya lain – karena itu perbandingan didasarkan pada biaya perolehan per satuan, bukan harga daftar saja (PUR-08)." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Penerimaan" value={formatNumber(totalReceipts)} />
         <ReportKpiCard label="Total Qty Diterima" value={formatNumber(totalQty)} />

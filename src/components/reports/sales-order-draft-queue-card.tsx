@@ -88,7 +88,7 @@ export function SalesOrderDraftQueueCard({
         </div>
         <div className="flex items-center gap-2">
           <p className="text-xs font-mono tabular-nums text-muted-foreground">
-            {totalDocuments} dokumen — {formatCurrencyExact(totalGrandTotal)}{" "}
+            {totalDocuments} dokumen, {formatCurrencyExact(totalGrandTotal)}{" "}
             {SALES_ORDER_DRAFT_TOTAL_LABEL_TEXT}
           </p>
         </div>

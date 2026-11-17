@@ -99,7 +99,7 @@ describe("disposeAsset concurrency guard", () => {
     // Pra-tx lolos (approval lama); dalam tx (argumen ketiga terisi)
     // dokumen terbaca berubah sesudah approval final → fail-closed basi.
     assertApprovedMock.mockImplementation(async (...a: unknown[]) => {
-      if (a[2]) throw new Error("Dokumen berubah sesudah persetujuan final — ajukan ulang persetujuan sebelum dilanjutkan.")
+      if (a[2]) throw new Error("Dokumen berubah sesudah persetujuan final, ajukan ulang persetujuan sebelum dilanjutkan.")
       return undefined
     })
     const result = await disposeAsset(new FormData())

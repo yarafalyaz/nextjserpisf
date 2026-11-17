@@ -99,27 +99,27 @@ export function computeCompensationAmount(
 
 export const PKWT_MSG = {
   underOneMonth: (months: number) =>
-    `Masa kerja ${months} bulan kurang dari 1 bulan — kompensasi PKWT tidak berhak (PP 35/2021 Pasal 15(3)); peristiwa ditolak.`,
+    `Masa kerja ${months} bulan kurang dari 1 bulan – kompensasi PKWT tidak berhak (PP 35/2021 Pasal 15(3)); peristiwa ditolak.`,
   basisZero: () =>
-    `Basis upah kompensasi PKWT nol/negatif — peristiwa ditolak. Basis = gaji pokok + tunjangan tetap bulan terakhir segmen.`,
+    `Basis upah kompensasi PKWT nol/negatif – peristiwa ditolak. Basis = gaji pokok + tunjangan tetap bulan terakhir segmen.`,
   notPkwt: (status: string | null) =>
-    `Karyawan berstatus '${status ?? "belum diatur"}' — peristiwa kompensasi hanya untuk PKWT.`,
+    `Karyawan berstatus '${status ?? "belum diatur"}' – peristiwa kompensasi hanya untuk PKWT.`,
   mappingMissing: () =>
-    `Mapping akun kompensasi PKWT belum lengkap — isi pkwtCompensationExpenseAccountId (600028 Beban Kompensasi PKWT) dan pkwtCompensationPayableAccountId (210207 Utang Kompensasi PKWT) di Pengaturan > Mapping Akun.`,
+    `Mapping akun kompensasi PKWT belum lengkap – isi pkwtCompensationExpenseAccountId (600028 Beban Kompensasi PKWT) dan pkwtCompensationPayableAccountId (210207 Utang Kompensasi PKWT) di Pengaturan > Mapping Akun.`,
   forbiddenAccount: (code: string) =>
     `Akun ${code} dilarang untuk kompensasi PKWT (600005/210204 rumah pesangon/potongan gaji berjalan). Pakai 600028/210207 lewat mapping.`,
   accountInactive: (code: string) =>
-    `Akun mapping kompensasi PKWT ${code} tidak aktif/terhapus — perbaiki mapping di Pengaturan > Mapping Akun.`,
+    `Akun mapping kompensasi PKWT ${code} tidak aktif/terhapus – perbaiki mapping di Pengaturan > Mapping Akun.`,
   segmentOverlap: () =>
-    `Segmen kompensasi PKWT ini beririsan dengan peristiwa aktif karyawan yang sama — satu segmen satu peristiwa.`,
+    `Segmen kompensasi PKWT ini beririsan dengan peristiwa aktif karyawan yang sama – satu segmen satu peristiwa.`,
   agreementRequired: () =>
     `Nominal kesepakatan usaha mikro/kecil wajib dokumen kesepakatan tertulis tertaut (agreementDocumentRef). Tanpa dokumen, rumus umum berlaku.`,
   notApproved: () =>
-    `Peristiwa kompensasi PKWT belum disetujui/nominal belum terbekukan — tidak boleh ditarik ke slip.`,
+    `Peristiwa kompensasi PKWT belum disetujui/nominal belum terbekukan – tidak boleh ditarik ke slip.`,
   alreadyPaid: () =>
-    `Peristiwa kompensasi PKWT ini sudah punya baris slip — satu peristiwa paling banyak satu baris slip terbayar.`,
+    `Peristiwa kompensasi PKWT ini sudah punya baris slip – satu peristiwa paling banyak satu baris slip terbayar.`,
   partialForbidden: () =>
-    `Pembayaran parsial kompensasi PKWT ditolak — nominal slip wajib sama dengan nominal peristiwa penuh.`,
+    `Pembayaran parsial kompensasi PKWT ditolak – nominal slip wajib sama dengan nominal peristiwa penuh.`,
   separateDocumentForbidden: () =>
     `Kompensasi PKWT wajib dibayar lewat slip gaji dari peristiwa terbekukan (Q-EMP-5); dokumen bayar terpisah ditolak.`,
 } as const
@@ -206,12 +206,12 @@ export function buildPkwtReconciliation(
     const findings: string[] = []
     if (r.paidSlipTotal > 0 && r.accrualSubledgerTotal === 0 && r.frozenEventTotal > 0) {
       findings.push(
-        "Slip kompensasi terbayar tanpa akrual berjalan — kaki debit wajib 600028 (bukan 210207) sesuai snapshot baris; pastikan bukan beban ganda.",
+        "Slip kompensasi terbayar tanpa akrual berjalan – kaki debit wajib 600028 (bukan 210207) sesuai snapshot baris; pastikan bukan beban ganda.",
       )
     }
     if (accrualVsEventDiff !== 0 && r.frozenEventTotal > 0) {
       findings.push(
-        `Selisih nominal peristiwa terbekukan vs akrual subledger Rp${formatNumber(accrualVsEventDiff, 2)} — segmen belum terakrual penuh (negatif = akrual melebihi); tampil sebagai temuan, bukan dipilih diam-diam.`,
+        `Selisih nominal peristiwa terbekukan vs akrual subledger Rp${formatNumber(accrualVsEventDiff, 2)} (segmen belum terakrual penuh (negatif = akrual melebihi); tampil sebagai temuan, bukan dipilih diam-diam.`,
       )
     }
     return { ...r, expectedPayable, accrualVsEventDiff, findings }
@@ -343,7 +343,7 @@ export function buildPkwtCompensationReport(input: {
       anomalies.push({
         code: "PAID_WITHOUT_ACCRUAL",
         label: "Terbayar tanpa akrual",
-        detail: `Peristiwa #${r.eventId} (${r.employeeName}) terbayar tanpa akrual berjalan — kaki debit wajib 600028 sesuai snapshot baris.`,
+        detail: `Peristiwa #${r.eventId} (${r.employeeName}) terbayar tanpa akrual berjalan – kaki debit wajib 600028 sesuai snapshot baris.`,
       })
     }
   }

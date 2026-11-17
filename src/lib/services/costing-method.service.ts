@@ -91,7 +91,7 @@ export async function getGlobalCostingMethod(
   if (hit) return hit
   if (raw != null && raw.trim() !== "") {
     throw new Error(
-      `Metode penetapan biaya global "${raw}" tidak dikenal — harus "FIFO" atau "Average". ` +
+      `Metode penetapan biaya global "${raw}" tidak dikenal, harus "FIFO" atau "Average". ` +
         `Perbaiki di Pengaturan → Umum sebelum memposting transaksi stok.`,
     )
   }

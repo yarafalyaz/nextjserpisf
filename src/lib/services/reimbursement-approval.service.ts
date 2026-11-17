@@ -29,7 +29,7 @@ export async function assertClaimantPayable(
     claimant.employmentEndedAt != null
   ) {
     throw new Error(
-      "Klaim tidak dapat diproses: karyawan pengaju sudah nonaktif/berhenti — tolak klaim dan selesaikan lewat jalur berhenti.",
+      "Klaim tidak dapat diproses: karyawan pengaju sudah nonaktif/berhenti, tolak klaim dan selesaikan lewat jalur berhenti.",
     );
   }
 }
@@ -66,7 +66,7 @@ export async function assertReimbursementApprovalGates(
     claimAccount.type !== "EXPENSE"
   ) {
     throw new Error(
-      "Akun beban klaim belum valid (wajib akun beban EXPENSE aktif) — tetapkan akun final sebelum menyetujui.",
+      "Akun beban klaim belum valid (wajib akun beban EXPENSE aktif), tetapkan akun final sebelum menyetujui.",
     );
   }
 

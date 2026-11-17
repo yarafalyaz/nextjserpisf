@@ -1022,7 +1022,7 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // F-041 (vonis BOT 4): liabilitas PPh 4(2) final sewa PP 34/2017.
   // 210205 = Provisi Garansi, DILARANG reuse untuk pajak.
   ["210206", "Utang PPh 4(2) Sewa Tanah/Bangunan", "OCLY", "2102"],
-  ["110508", "Piutang Klaim Supplier — Garansi", "OCAS", "1105"],
+  ["110508", "Piutang Klaim Supplier – Garansi", "OCAS", "1105"],
   ["600025", "Diskon Pembelian", "EXPS", "6000"],
   ["600026", "Retur Pembelian", "EXPS", "6000"],
   // F-2026-10-23-128-V (vonis BOT 4): akun peristiwa penyesuaian nilai aset

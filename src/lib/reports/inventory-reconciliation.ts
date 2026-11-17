@@ -93,7 +93,7 @@ export function buildInventoryReconciliation(
     rows.push({
       kind: "data",
       cells: [
-        `   · ${warehouse.name} (${warehouse.code}) — ${warehouse.items} barang`,
+        `   · ${warehouse.name} (${warehouse.code}), ${warehouse.items} barang`,
         amount(warehouse.value),
       ],
     })
@@ -121,13 +121,13 @@ export function buildInventoryReconciliation(
       kind: "notice",
       text:
         "Akun persediaan belum dipetakan di Pengaturan → Pemetaan Akun, sehingga saldo buku besar tidak " +
-        "bisa dibandingkan. Laporan ini sengaja tidak menampilkan 0 — angka 0 akan terbaca seolah sudah cocok.",
+        "bisa dibandingkan. Laporan ini sengaja tidak menampilkan 0 – angka 0 akan terbaca seolah sudah cocok.",
     })
   } else if (isBalanced) {
     verdict = "Saldo akun persediaan sama dengan nilai barang."
     rows.push({
       kind: "notice",
-      text: "Saldo akun persediaan sama dengan nilai barang menurut lapisan persediaan — tidak ada selisih.",
+      text: "Saldo akun persediaan sama dengan nilai barang menurut lapisan persediaan – tidak ada selisih.",
     })
   } else {
     verdict = `Ada selisih ${preciseAmount(Math.abs(difference ?? 0))} antara buku besar dan nilai barang.`
@@ -147,7 +147,7 @@ export function buildInventoryReconciliation(
       text:
         "Nilai barang dihitung dari kondisi lapisan persediaan SAAT INI, sedangkan saldo akun dihitung s/d " +
         "akhir periode. Karena periodenya bukan periode berjalan, selisih dapat berasal dari perbedaan " +
-        "titik waktu — bukan berarti ada transaksi yang salah.",
+        "titik waktu – bukan berarti ada transaksi yang salah.",
     })
   }
 

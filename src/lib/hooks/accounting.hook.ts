@@ -239,7 +239,7 @@ export async function deleteJournalByReferenceTx(
   });
   if (offenders.length > 0) {
     throw new Error(
-      `Jurnal ${offenders.map((j) => `#${j.id} (${j.status})`).join(", ")} sudah terposting dan tidak dapat dihapus — gunakan pembalikan (reversal) agar histori buku besar tetap utuh.`,
+      `Jurnal ${offenders.map((j) => `#${j.id} (${j.status})`).join(", ")} sudah terposting dan tidak dapat dihapus, gunakan pembalikan (reversal) agar histori buku besar tetap utuh.`,
     );
   }
 
@@ -370,7 +370,7 @@ export async function reverseJournalsByReferenceTx(
     if (status === "REVERSED") continue;
     if (status !== "POSTED" && status !== "DRAFT") {
       throw new Error(
-        `Jurnal #${j.id} berstatus "${j.status}" yang tidak dikenal pembalikan otomatis — periksa jurnalnya secara manual sebelum pembatalan.`,
+        `Jurnal #${j.id} berstatus "${j.status}" yang tidak dikenal pembalikan otomatis, periksa jurnalnya secara manual sebelum pembatalan.`,
       );
     }
     if (status === "DRAFT") {
@@ -440,7 +440,7 @@ export async function onSalesInvoicePosted(
   if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId) {
     throw new Error(
       "Akun penjualan belum dipetakan (Piutang / Pendapatan). " +
-        "Atur di Pengaturan → Akun sebelum memposting faktur — tanpa itu faktur akan " +
+        "Atur di Pengaturan → Akun sebelum memposting faktur, tanpa itu faktur akan " +
         "berstatus terposting tanpa entri buku sama sekali.",
     );
   }
@@ -457,7 +457,7 @@ export async function onSalesInvoicePosted(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`
+      `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`
     );
     return;
   }
@@ -576,7 +576,7 @@ export async function onSalesInvoicePosted(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`
+        `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`
       );
       return;
     }
@@ -593,7 +593,7 @@ export async function onSalesInvoicePosted(
     });
     if (existingOutMove) {
       console.info(
-        `[accounting.hook] faktur #${invoiceId} sudah punya gerakan stok OUT #${existingOutMove.id} — posting dilewati`
+        `[accounting.hook] faktur #${invoiceId} sudah punya gerakan stok OUT #${existingOutMove.id}, posting dilewati`
       );
       return;
     }
@@ -648,7 +648,7 @@ export async function onSalesInvoicePosted(
     if (physicalLineHasScrapItem && !isScrapSaleInvoice) {
       throw new Error(
         "Posting faktur ditolak: faktur berisi campuran item besi tua (scrap) dan baris non-besi-tua. " +
-          "Pisahkan faktur besi tua dari faktur penjualan biasa — hasil jual scrap dilarang masuk akun Pendapatan Penjualan utama.",
+          "Pisahkan faktur besi tua dari faktur penjualan biasa, hasil jual scrap dilarang masuk akun Pendapatan Penjualan utama.",
       );
     }
     if (
@@ -663,7 +663,7 @@ export async function onSalesInvoicePosted(
       if (!settings.scrapSaleIncomeAccountId) {
         throw new Error(
           "Akun pendapatan besi tua (scrap) belum dipetakan. " +
-            "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting faktur besi tua — " +
+            "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting faktur besi tua, " +
             "hasil jual scrap dilarang masuk akun Pendapatan Penjualan utama.",
         );
       }
@@ -910,7 +910,7 @@ export async function onSalesInvoicePosted(
             const fetched = factorMap.get(`${line.itemId}:${uom}`);
             if (fetched == null || !(fetched > 0)) {
               console.warn(
-                `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — kebutuhan stok dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+                `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`}, kebutuhan stok dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
               );
             } else {
               factor = fetched;
@@ -973,7 +973,7 @@ export async function onSalesInvoicePosted(
         const fetched = factorMap.get(`${line.itemId}:${uom}`);
         if (fetched == null || !(fetched > 0)) {
           console.warn(
-            `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — qty jual dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+            `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`}, qty jual dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
           );
         } else {
           factor = fetched;
@@ -1044,7 +1044,7 @@ export async function onSalesInvoicePosted(
     if (cogsAmount > 0 && (!settings.cogsAccountId || !settings.inventoryAccountId)) {
       throw new Error(
         "Akun HPP/Persediaan belum dipetakan (cogsAccountId/inventoryAccountId). " +
-          "Atur di Pengaturan → Akun sebelum memposting faktur — tanpa itu stok keluar dan pendapatan tercatat tanpa HPP.",
+          "Atur di Pengaturan → Akun sebelum memposting faktur, tanpa itu stok keluar dan pendapatan tercatat tanpa HPP.",
       );
     }
     if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
@@ -1127,7 +1127,7 @@ export async function onSalesPaymentCreated(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -1158,7 +1158,7 @@ export async function onSalesPaymentCreated(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -1256,7 +1256,7 @@ export async function onPurchaseOrderReceived(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -1275,7 +1275,7 @@ export async function onPurchaseOrderReceived(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -1382,7 +1382,7 @@ export async function onExpenseApproved(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -1401,7 +1401,7 @@ export async function onExpenseApproved(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -1437,7 +1437,7 @@ export async function onExpenseApproved(
           memo: (() => {
             const tag = parseL3Tag(expense.description);
             return tag
-              ? `Biaya: biaya telat non-job L3 ${tag.workOrderNo} — ${expense.description ?? ""}`
+              ? `Biaya: biaya telat non-job L3 ${tag.workOrderNo}, ${expense.description ?? ""}`
               : `Biaya: ${expense.description ?? ""}`;
           })(),
           costCenterId: expense.costCenterId ?? null,
@@ -1474,7 +1474,7 @@ async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<num
   const accountId = settings.reimbursementLiabilityAccountId
   if (!accountId) {
     throw new Error(
-      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) belum dipetakan di Pengaturan → Mapping Akun. Petakan lebih dulu — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) belum dipetakan di Pengaturan → Mapping Akun. Petakan lebih dulu, approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
     )
   }
   const account = await db.account.findUnique({
@@ -1488,12 +1488,12 @@ async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<num
   }
   if (account.deletedAt) {
     throw new Error(
-      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) sudah terhapus. Petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) sudah terhapus. Petakan akun 210209 aktif di Mapping Akun, approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
     )
   }
   if (!account.isActive) {
     throw new Error(
-      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) nonaktif. Aktifkan kembali atau petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) nonaktif. Aktifkan kembali atau petakan akun 210209 aktif di Mapping Akun, approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
     )
   }
   if (account.code !== "210209") {
@@ -1532,7 +1532,7 @@ async function postReimbursementJournal(
   })
   if (existing) {
     console.info(
-      `[accounting.hook] klaim #${input.expenseId} tahap ${input.referenceType} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] klaim #${input.expenseId} tahap ${input.referenceType} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     )
     return
   }
@@ -1635,7 +1635,7 @@ export async function onReimbursementClaimPaid(
   })
   if (!accrued) {
     throw new Error(
-      `Klaim ${expense.documentNo} belum punya jurnal akrual J-RB1 — bayar ditolak. Setujui klaim lebih dulu sampai akrual terposting.`,
+      `Klaim ${expense.documentNo} belum punya jurnal akrual J-RB1, bayar ditolak. Setujui klaim lebih dulu sampai akrual terposting.`,
     )
   }
   const liabilityAccountId = await resolveReimbursementLiabilityAccountId(db)
@@ -1685,7 +1685,7 @@ export async function onPettyCashCreated(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -1711,7 +1711,7 @@ export async function onPettyCashCreated(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -1867,7 +1867,7 @@ export async function onSalesReturnCompleted(
   }
   if (scrapClass === "mixed") {
     throw new Error(
-      "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang — " +
+      "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang, " +
         "pendapatan besi tua masuk akun lain-lain dan nilai bukunya Rp0.",
     );
   }
@@ -1911,7 +1911,7 @@ export async function onSalesReturnCompleted(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -2008,7 +2008,7 @@ export async function onSalesReturnCompleted(
       });
       if (!cap.allowed) {
         throw new Error(
-          `Potongan retur kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi faktur asal (DPP ${sourceDpp} / PPN ${source.taxAmount}) — retur ditolak`,
+          `Potongan retur kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi faktur asal (DPP ${sourceDpp} / PPN ${source.taxAmount}), retur ditolak`,
         );
       }
       for (const line of candidateLines) {
@@ -2051,7 +2051,7 @@ export async function onSalesReturnCompleted(
       });
       if (existingInTx) {
         console.info(
-          `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+          `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
         );
         return;
       }
@@ -2149,7 +2149,7 @@ export async function onSalesReturnCompleted(
         (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
       if (excessCredit > 0 && !dpLiabilityAccountId) {
         throw new Error(
-          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur besi tua di atas sisa faktur — " +
+          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur besi tua di atas sisa faktur, " +
             "kelebihan tidak boleh mengkredit Piutang melebihi outstanding maupun Kas tanpa pengeluaran kas.",
         );
       }
@@ -2253,7 +2253,7 @@ export async function onSalesReturnCompleted(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -2328,7 +2328,7 @@ export async function onSalesReturnCompleted(
       excessCredit = safeSubtract(creditTotal, receivableCredit, 2);
       if (excessCredit > 0 && !dpLiabilityAccountId) {
         throw new Error(
-          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur penjualan di atas sisa faktur — " +
+          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur penjualan di atas sisa faktur, " +
             "kelebihan tidak boleh mengkredit Piutang melebihi outstanding maupun Kas tanpa pengeluaran kas.",
         );
       }
@@ -2544,7 +2544,7 @@ export async function onPurchaseReturnProcessed(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -2586,7 +2586,7 @@ export async function onPurchaseReturnProcessed(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -2856,7 +2856,7 @@ export async function onDownPaymentReceived(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -2875,7 +2875,7 @@ export async function onDownPaymentReceived(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -3006,7 +3006,7 @@ export async function onDownPaymentReceived(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const VENDOR_BILL_TAX_INVOICE_WARNING =
-  "Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.";
+  "Nomor faktur pajak belum diisi, PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.";
 
 export async function onVendorBillPosted(
   billId: number,
@@ -3031,7 +3031,7 @@ export async function onVendorBillPosted(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -3084,7 +3084,7 @@ export async function onVendorBillPosted(
     // while the payable stays at grandTotal. Fail closed instead.
     if (taxAmount > grandTotal) {
       throw new Error(
-        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}) — periksa data tagihan vendor`,
+        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}), periksa data tagihan vendor`,
       );
     }
     const clearingAmount = grandTotal - taxAmount;
@@ -3119,7 +3119,7 @@ export async function onVendorBillPosted(
     const taxAmount = creditInputVat ? Number(bill.tax ?? 0) : 0;
     if (taxAmount > grandTotal) {
       throw new Error(
-        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}) — periksa data tagihan vendor`,
+        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}), periksa data tagihan vendor`,
       );
     }
     debitEntries.push({
@@ -3148,7 +3148,7 @@ export async function onVendorBillPosted(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -3192,13 +3192,13 @@ export async function onVendorBillPosted(
     const latestWithholding = Number(b.withholdingAmount ?? 0);
     if (latestWithholding > latestGrandTotal) {
       throw new Error(
-        `Pemotongan PPh (${latestWithholding}) melebihi total keseluruhan tagihan (${latestGrandTotal}) — periksa data tagihan vendor`,
+        `Pemotongan PPh (${latestWithholding}) melebihi total keseluruhan tagihan (${latestGrandTotal}), periksa data tagihan vendor`,
       );
     }
     const withholdingAccountId = b.withholdingType?.liabilityAccountId ?? null;
     if (latestWithholding > 0 && !withholdingAccountId) {
       throw new Error(
-        "Jenis PPh pada tagihan ini belum memiliki akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong",
+        "Jenis PPh pada tagihan ini belum memiliki akun Hutang PPh, lengkapi di Pengaturan → Pajak Potong",
       );
     }
 
@@ -3213,7 +3213,7 @@ export async function onVendorBillPosted(
     if (goodsBased) {
       if (latestTaxAmount > latestGrandTotal) {
         throw new Error(
-          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}) — periksa data tagihan vendor`,
+          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}), periksa data tagihan vendor`,
         );
       }
       const clearingAmount = safeSubtract(latestGrandTotal, latestTaxAmount, 2);
@@ -3242,7 +3242,7 @@ export async function onVendorBillPosted(
       // dipecah ke PPN Masukan seperti cabang barang + jalur pra-tx.
       if (latestTaxAmount > latestGrandTotal) {
         throw new Error(
-          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}) — periksa data tagihan vendor`,
+          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}), periksa data tagihan vendor`,
         );
       }
       const l3BillTag = parseL3Tag(b.notes);
@@ -3251,7 +3251,7 @@ export async function onVendorBillPosted(
         debit: safeSubtract(latestGrandTotal, latestTaxAmount, 2),
         credit: 0,
         memo: l3BillTag
-          ? `Purchase expense — biaya telat non-job L3 ${l3BillTag.workOrderNo}`
+          ? `Purchase expense, biaya telat non-job L3 ${l3BillTag.workOrderNo}`
           : "Purchase expense",
       });
       if (latestTaxAmount > 0) {
@@ -3271,7 +3271,7 @@ export async function onVendorBillPosted(
               accountId: withholdingAccountId,
               debit: 0,
               credit: latestWithholding,
-              memo: `PPh dipotong — ${b.withholdingType?.name ?? "PPh"}`,
+              memo: `PPh dipotong, ${b.withholdingType?.name ?? "PPh"}`,
             },
           ]
         : []),
@@ -3358,7 +3358,7 @@ export async function onVendorPaymentCreated(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -3373,7 +3373,7 @@ export async function onVendorPaymentCreated(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -3463,10 +3463,10 @@ export async function onPayrollPaid(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting ganda dilewati`,
+      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting ganda dilewati`,
     );
     throw new Error(
-      `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+      `Penggajian #${payrollId} sudah punya jurnal aktif, posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
     );
   }
 
@@ -3485,8 +3485,8 @@ export async function onPayrollPaid(
     const docNo = (payroll as { documentNo?: unknown }).documentNo;
     throw new Error(
       typeof docNo === "string" && docNo.length > 0
-        ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
-        : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+        ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse, posting ulang slip asal ditolak; buat slip koreksi baru.`
+        : "Slip ini sudah pernah dijurnal lalu di-reverse, posting ulang slip asal ditolak; buat slip koreksi baru.",
     );
   }
 
@@ -3572,7 +3572,7 @@ export async function onPayrollPaid(
   const pkwtTotal = pkwtLines.reduce((s, l) => safeAdd(s, Number(l.amount) || 0, 2), 0);
   if (pkwtTotal > debitTotal) {
     throw new Error(
-      "Baris kompensasi PKWT melebihi bruto slip — jurnal payroll ditolak (snapshot baris tidak konsisten dengan gross slip).",
+      "Baris kompensasi PKWT melebihi bruto slip, jurnal payroll ditolak (snapshot baris tidak konsisten dengan gross slip).",
     );
   }
   if (pkwtTotal > 0) {
@@ -3582,7 +3582,7 @@ export async function onPayrollPaid(
     };
     if (!s2.pkwtCompensationExpenseAccountId || !s2.pkwtCompensationPayableAccountId) {
       throw new Error(
-        "Mapping akun kompensasi PKWT belum lengkap — isi pkwtCompensationExpenseAccountId (600028) dan pkwtCompensationPayableAccountId (210207) di Pengaturan > Mapping Akun sebelum slip berisi kompensasi PKWT diposting.",
+        "Mapping akun kompensasi PKWT belum lengkap, isi pkwtCompensationExpenseAccountId (600028) dan pkwtCompensationPayableAccountId (210207) di Pengaturan > Mapping Akun sebelum slip berisi kompensasi PKWT diposting.",
       );
     }
     for (const l of pkwtLines) {
@@ -3591,7 +3591,7 @@ export async function onPayrollPaid(
         : s2.pkwtCompensationExpenseAccountId;
       if (l.accountIdSnapshot !== expected) {
         throw new Error(
-          "Snapshot akun baris kompensasi PKWT tidak cocok dengan mapping kompensasi berjalan — jurnal payroll ditolak; buat ulang baris dari peristiwa terbekukan.",
+          "Snapshot akun baris kompensasi PKWT tidak cocok dengan mapping kompensasi berjalan, jurnal payroll ditolak; buat ulang baris dari peristiwa terbekukan.",
         );
       }
     }
@@ -3645,8 +3645,8 @@ export async function onPayrollPaid(
       const docNo = (payroll as { documentNo?: unknown }).documentNo;
       throw new Error(
         typeof docNo === "string" && docNo.length > 0
-          ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
-          : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+          ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse, posting ulang slip asal ditolak; buat slip koreksi baru.`
+          : "Slip ini sudah pernah dijurnal lalu di-reverse, posting ulang slip asal ditolak; buat slip koreksi baru.",
       );
     }
     const existingInTx = await tx.journal.findFirst({
@@ -3654,10 +3654,10 @@ export async function onPayrollPaid(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting ganda di dalam transaksi dilewati`,
+        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting ganda di dalam transaksi dilewati`,
       );
       throw new Error(
-        `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+        `Penggajian #${payrollId} sudah punya jurnal aktif, posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
       );
     }
 
@@ -3862,7 +3862,7 @@ export async function onEmployeeLoanDisbursed(
     select: { id: true },
   });
   if (!liveEmployee) {
-    throw new Error("Karyawan penerima pinjaman tidak ditemukan atau tidak aktif — pencairan ditolak");
+    throw new Error("Karyawan penerima pinjaman tidak ditemukan atau tidak aktif, pencairan ditolak");
   }
   // Akun settings wajib hidup: repayment/write-off di file ini sudah lewat
   // assertAccountsExist, pencairan sebelumnya tidak (inkonsistensi).
@@ -3877,7 +3877,7 @@ export async function onEmployeeLoanDisbursed(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -3890,7 +3890,7 @@ export async function onEmployeeLoanDisbursed(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -3969,7 +3969,7 @@ export async function onEmployeeLoanCashRepayment(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -3980,7 +3980,7 @@ export async function onEmployeeLoanCashRepayment(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }
@@ -4058,7 +4058,7 @@ export async function onEmployeeLoanWrittenOff(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existing.journalNumber ?? existing.id}, posting dilewati`,
     );
     return;
   }
@@ -4069,7 +4069,7 @@ export async function onEmployeeLoanWrittenOff(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id}, posting di dalam transaksi dilewati`,
       );
       return;
     }

@@ -97,7 +97,7 @@ export function serializeWithholdingCertificatesCsv(
     r.documentNo,
     r.counterparty,
     r.npwp?.trim() ? r.npwp.trim() : "",
-    r.typeCode ? `${r.typeCode} — ${r.typeName ?? ""}`.trim() : "",
+    r.typeCode ? `${r.typeCode} - ${r.typeName ?? ""}`.trim() : "",
     r.rate === null ? "" : String(r.rate),
     amount(r.dpp),
     amount(r.withheld),
@@ -162,8 +162,8 @@ export function buildWithholdingCertificateTable(
   let salesWithheld = 0
 
   const sections: { side: "purchase" | "sales"; label: string; totalLabel: string }[] = [
-    { side: "purchase", label: "Pembelian — PPh yang Dipotong Perusahaan", totalLabel: "Total PPh Pembelian" },
-    { side: "sales", label: "Penjualan — PPh yang Dipotong Pelanggan", totalLabel: "Total PPh Penjualan" },
+    { side: "purchase", label: "Pembelian – PPh yang Dipotong Perusahaan", totalLabel: "Total PPh Pembelian" },
+    { side: "sales", label: "Penjualan – PPh yang Dipotong Pelanggan", totalLabel: "Total PPh Penjualan" },
   ]
   for (const section of sections) {
     const sideRows = sortRows(input.filter((r) => r.side === section.side))
@@ -182,7 +182,7 @@ export function buildWithholdingCertificateTable(
           r.certificateNo?.trim() ? r.certificateNo.trim() : "—",
           r.documentNo,
           r.counterparty,
-          r.typeCode ? `${r.typeCode} — ${r.typeName ?? ""}`.trim() : "—",
+          r.typeCode ? `${r.typeCode} - ${r.typeName ?? ""}`.trim() : "—",
           r.dpp === null ? "" : tableMoney(r.dpp),
           tableMoney(r.withheld),
         ],

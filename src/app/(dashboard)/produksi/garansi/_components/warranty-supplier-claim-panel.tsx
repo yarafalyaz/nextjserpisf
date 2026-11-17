@@ -41,8 +41,8 @@ const SUPPLIER_CLAIM_LABELS: Record<string, string> = {
   accepted: "Diterima supplier",
   rejected_supplier: "Ditolak supplier",
   returned: "Part sudah diretur",
-  closed_recovered: "Tutup — recovery diterima",
-  closed_no_recovery: "Tutup — tanpa recovery",
+  closed_recovered: "Tutup – recovery diterima",
+  closed_no_recovery: "Tutup – tanpa recovery",
 }
 
 // Transisi recovery dari warranty.service (R1–R8) ditampilkan apa adanya;
@@ -153,7 +153,7 @@ export function WarrantySupplierClaimPanel({
       >
         <h2 className="text-[0.9375rem] font-semibold text-foreground">Klaim Supplier Part Cacat</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Status recovery supplier terpisah dari status klaim pelanggan di atas — klaim pelanggan bisa
+          Status recovery supplier terpisah dari status klaim pelanggan di atas, klaim pelanggan bisa
           ditutup sementara recovery supplier masih berjalan.
         </p>
         <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">

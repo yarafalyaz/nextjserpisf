@@ -232,7 +232,7 @@ export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingR
   const rows: TableRow[] = [{ kind: "group", label: "Ringkasan Umur Hutang" }]
   rows.push({
     kind: "notice",
-    text: "Total Hutang mencakup tagihan tanpa tanggal jatuh tempo (kelompok Tanpa Jatuh Tempo) — beda dengan laporan Hutang Jatuh Tempo yang hanya memuat tagihan ber-jatuh-tempo.",
+    text: "Total Hutang mencakup tagihan tanpa tanggal jatuh tempo (kelompok Tanpa Jatuh Tempo) – beda dengan laporan Hutang Jatuh Tempo yang hanya memuat tagihan ber-jatuh-tempo.",
   })
   for (const group of summary.aging) {
     rows.push({

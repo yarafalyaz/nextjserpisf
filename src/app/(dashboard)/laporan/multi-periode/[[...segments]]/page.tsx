@@ -132,7 +132,7 @@ export default async function MultiPeriodReportPage({
   const totalLiabilitiesEquity = columns.map((_, index) => safeAdd(sumByType('LIABILITY')[index], totalEquityWithEarnings[index], 2))
 
   const columnCount = columns.length + 2 // label + total
-  const periodLabel = `${MULTI_PERIOD_MODE_LABELS[mode]} — ${columns[0].label} s/d ${columns[columns.length - 1].label}`
+  const periodLabel = `${MULTI_PERIOD_MODE_LABELS[mode]} – ${columns[0].label} s/d ${columns[columns.length - 1].label}`
 
   const fullRangeSlug = columns.length
     ? buildReportPeriodSlug(columns[0].start, columns[columns.length - 1].end)
@@ -149,7 +149,7 @@ export default async function MultiPeriodReportPage({
           <tr key={account.id}>
             <td className="whitespace-nowrap indent-1">
               <Link href={`/laporan/buku-besar/${fullRangeSlug}/akun/${account.slug ?? account.id}`}>
-                {account.code} — {account.name}
+                {account.code} – {account.name}
               </Link>
             </td>
             {columns.map((column) => (

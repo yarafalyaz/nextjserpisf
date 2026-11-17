@@ -110,7 +110,7 @@ describe("OvertimeRecapTable F-2026-10-25-016-S", () => {
     // Asersi literal verbatim (bukan konstanta impor produksi): mutasi isi
     // OVERTIME_RECAP_NOTICE/label di lib WAJIB membuat tes ini merah.
     expect(text).toContain(
-      "Rekap jam lembur operasional — bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
+      "Rekap jam lembur operasional – bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
     )
     expect(text).toContain("bukan dasar pembayaran")
     expect(text).toContain("Budi Santoso")

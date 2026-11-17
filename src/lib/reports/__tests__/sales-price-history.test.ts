@@ -75,7 +75,7 @@ function event(overrides: Partial<SalesPriceEventInput> = {}): SalesPriceEventIn
 describe("sales-price-history builder (F-2026-10-25-028-S)", () => {
   it("notice BR-PH-05 + label verbatim + batas putusan sejajar 039-S", () => {
     expect(SALES_PRICE_HISTORY_NOTICE_TEXT).toBe(
-      "Harga transaksi lampau — bukan harga jual saat ini; harga berlaku mengikuti daftar harga/master saat penawaran dibuat.",
+      "Harga transaksi lampau – bukan harga jual saat ini; harga berlaku mengikuti daftar harga/master saat penawaran dibuat.",
     )
     expect(SALES_PRICE_HISTORY_UNKNOWN_SOURCE_LABEL).toBe("Sumber harga tidak tercatat")
     expect(SALES_PRICE_HISTORY_ITEMLESS_LABEL).toBe("BARIS_TANPA_BARANG")

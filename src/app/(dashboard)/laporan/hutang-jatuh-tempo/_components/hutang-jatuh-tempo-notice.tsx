@@ -12,7 +12,7 @@ export function HutangJatuhTempoNotice() {
       data-testid="hutang-jatuh-tempo-scope-notice"
       className="print:hidden rounded-lg border border-default bg-surface px-4 py-2.5 text-sm text-muted-foreground"
     >
-      Halaman ini tidak termasuk tagihan tanpa tanggal jatuh tempo — lihat{" "}
+      Halaman ini tidak termasuk tagihan tanpa tanggal jatuh tempo, lihat{" "}
       <Link
         href="/laporan/total-hutang"
         className="text-primary hover:underline"

@@ -11,7 +11,7 @@ import { mountInto, unmount, withContainer } from "./form-a11y-test-utils"
 // tautan detail existing via slug. Nol hitung kemiripan di UI.
 const warning: CustomerDuplicateWarningView = {
   title: "Kemungkinan pelanggan ganda",
-  body: "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu — pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master.",
+  body: "Data ini cocok dengan pelanggan yang sudah ada. Periksa dulu, pelanggan ganda membagi penawaran, faktur, kendaraan, dan piutang ke dua master.",
   candidates: [
     {
       id: 7,

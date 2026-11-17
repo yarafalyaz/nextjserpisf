@@ -81,12 +81,12 @@ export async function snapshotWorkOrderCostEstimateTx(
     material = sum
     notes =
       sum === null
-        ? "estimasi material tidak bisa diturunkan — isi manual"
+        ? "estimasi material tidak bisa diturunkan, isi manual"
         : usedFallback
           ? "sebagian baris memakai Item.cost (fallback standardCost=0)"
           : undefined
   } else {
-    notes = "WO tanpa quotation disetujui — estimasi material belum bisa diturunkan"
+    notes = "WO tanpa quotation disetujui, estimasi material belum bisa diturunkan"
   }
 
   return tx.workOrderCostEstimate.create({

@@ -24,7 +24,7 @@ describe("MinStockWarehouseCard F-2026-10-21-013 + label sumber F-2026-10-22-070
     const { container, root } = renderCard(
       <MinStockWarehouseCard
         shortages={shortages}
-        note="Per gudang: minimum masih global — batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
+        note="Per gudang: minimum masih global – batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
       />,
     )
     const text = container.textContent ?? ""
@@ -36,7 +36,7 @@ describe("MinStockWarehouseCard F-2026-10-21-013 + label sumber F-2026-10-22-070
     expect(text).toContain("Plat Besi 3mm")
     expect(text).toContain("Pipa Galvanis")
     expect(text).toContain(
-      "Per gudang: minimum masih global — batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur.",
+      "Per gudang: minimum masih global – batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur.",
     )
     expect(text).toContain("Rp 500.000")
     expect(text).toContain("Rp 100.000")

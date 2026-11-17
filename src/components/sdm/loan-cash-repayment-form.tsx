@@ -69,7 +69,7 @@ export function LoanCashRepaymentForm({
               <span className="font-semibold tabular-nums text-foreground">
                 {formatCurrencyExact(remainingAmount)}
               </span>
-              . Setoran melebihi sisa ditolak — kelebihan dikembalikan ke karyawan.
+              . Setoran melebihi sisa ditolak, kelebihan dikembalikan ke karyawan.
             </p>
           </div>
           <div className="flex flex-col gap-1.5">

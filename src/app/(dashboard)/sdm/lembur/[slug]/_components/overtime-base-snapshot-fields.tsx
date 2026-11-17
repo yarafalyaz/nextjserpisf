@@ -48,7 +48,7 @@ export function OvertimeBaseSnapshotFields({
       {snapshot.floor75Applied ? (
         <DetailField
           label="Lantai 75% Upah Total (PP 36/2021)"
-          value="Berlaku — pokok + tunjangan tetap di bawah 75% upah total"
+          value="Berlaku – pokok + tunjangan tetap di bawah 75% upah total"
         />
       ) : null}
       <DetailField label="Dasar Upah Lembur" value={formatCurrencyExact(snapshot.baseTotal)} />

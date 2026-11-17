@@ -119,7 +119,7 @@ export default async function CashProjectionPage({
   const totalInflow = rows.reduce((sum, row) => safeAdd(sum, row.inflow, 2), 0)
   const totalOutflow = rows.reduce((sum, row) => safeAdd(sum, row.outflow, 2), 0)
   const closing = rows.length > 0 ? rows[rows.length - 1].closing : opening
-  const periodLabel = `${months} bulan ke depan — per ${formatDate(now)}`
+  const periodLabel = `${months} bulan ke depan – per ${formatDate(now)}`
 
   return (
     <ReportPageShell title="Proyeksi Kas" sheet={false} wide filter={<>
@@ -156,7 +156,7 @@ export default async function CashProjectionPage({
 
       <ReportSection title="Komitmen Belum Tertagih (Memo)">
         <p className="text-sm text-muted-foreground">
-          Memo terpisah — tidak mengurangi saldo proyeksi di atas: PO terbuka belum menjadi tagihan dan gaji periode berikut belum jatuh tempo dokumen.
+          Memo terpisah, tidak mengurangi saldo proyeksi di atas: PO terbuka belum menjadi tagihan dan gaji periode berikut belum jatuh tempo dokumen.
         </p>
         <DetailTable data-report-table="Komitmen Belum Tertagih">
           <DetailTableBody>
@@ -204,7 +204,7 @@ export default async function CashProjectionPage({
         </DetailTable>
       </ReportSection>
 
-      <ReportNarration text={`Saldo kas dihitung dari akun kas/bank kanonis (akun yang dipetakan pada Pengaturan → Mapping Akun serta akun Aktiva bergolongan Bank yang masih aktif) — definisi yang sama dengan Arus Kas dan Buku Bank. Bila belum ada akun kas/bank aktif, saldo awal dianggap nol.`} />
+      <ReportNarration text={`Saldo kas dihitung dari akun kas/bank kanonis (akun yang dipetakan pada Pengaturan → Mapping Akun serta akun Aktiva bergolongan Bank yang masih aktif) – definisi yang sama dengan Arus Kas dan Buku Bank. Bila belum ada akun kas/bank aktif, saldo awal dianggap nol.`} />
     </ReportPageShell>
   )
 }

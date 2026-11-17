@@ -163,7 +163,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
                   {c.scope.vehicleBrandId != null ? `, merek #${c.scope.vehicleBrandId}` : ""}
                   {c.scope.vehicleModelId != null ? `, model #${c.scope.vehicleModelId}` : ""}
                   {c.scope.vehicleVariantId != null ? `, varian #${c.scope.vehicleVariantId}` : ""}
-                  {c.source ? ` — ${c.source}` : ""}
+                  {c.source ? ` (${c.source}` : ""}
                 </li>
               ))}
             </ul>

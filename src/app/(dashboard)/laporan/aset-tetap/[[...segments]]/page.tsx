@@ -79,7 +79,7 @@ export default async function AssetRegisterPage({
         tableLabel="Daftar Aset Tetap"
       />
       <p className="doc-lines" style={{ marginTop: 8 }}>
-        {register.assetCount} aset di buku — harga perolehan {formatCurrencyExact(register.totalCost)}, akumulasi
+        {register.assetCount} aset di buku, harga perolehan {formatCurrencyExact(register.totalCost)}, akumulasi
         penyusutan {formatCurrencyExact(register.totalAccumulatedDepreciation)}, nilai buku{" "}
         {formatCurrencyExact(register.totalBookValue)}.
         {register.disposedCount > 0

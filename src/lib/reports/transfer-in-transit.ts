@@ -209,7 +209,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
       kind: "notice",
       text:
         `Ada ${oldTransfers} pemindahan berumur lebih dari 60 hari yang belum diterima. Periksa apakah barangnya ` +
-        `benar-benar sampai — pemindahan yang mengendap biasanya berarti barangnya hilang atau dokumennya terlupa.`,
+        `benar-benar sampai – pemindahan yang mengendap biasanya berarti barangnya hilang atau dokumennya terlupa.`,
     })
   }
 
@@ -218,7 +218,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
       kind: "notice",
       text:
         `${totals.estimatedLines} baris tidak menemukan pergerakan stoknya, sehingga nilainya dihitung dari harga ` +
-        `pokok barang saat ini — bukan harga lot yang benar-benar keluar. Angka itu perkiraan, bukan nilai pasti.`,
+        `pokok barang saat ini – bukan harga lot yang benar-benar keluar. Angka itu perkiraan, bukan nilai pasti.`,
     })
   }
 
@@ -226,7 +226,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     rows.push({
       kind: "notice",
       text:
-        "Periode ini memuat lebih dari satu satuan, jadi kolom jumlah TIDAK dijumlahkan — hanya kolom nilai yang " +
+        "Periode ini memuat lebih dari satu satuan, jadi kolom jumlah TIDAK dijumlahkan – hanya kolom nilai yang " +
         "bertotal.",
     })
   }
@@ -235,7 +235,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     rows.push({
       kind: "notice",
       text:
-        "Daftar ini adalah kondisi pemindahan SAAT INI, sedangkan periode yang dibuka bukan periode berjalan — " +
+        "Daftar ini adalah kondisi pemindahan SAAT INI, sedangkan periode yang dibuka bukan periode berjalan – " +
         "pemindahan yang sudah diterima setelah tanggal itu tidak lagi muncul di sini.",
     })
   }

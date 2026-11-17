@@ -569,7 +569,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               <Label htmlFor="isProduct">Tandai sebagai Produk</Label>
             </div>
             <span className="text-xs text-muted-foreground">Aktifkan jika item ini merupakan produk jadi</span>
-            {isScrapSaleItem && <span className="text-xs text-muted-foreground">Nonaktif saat item ditandai besi tua — server menolak posting faktur besi tua untuk item produk (jalur stok/COGS).</span>}
+            {isScrapSaleItem && <span className="text-xs text-muted-foreground">Nonaktif saat item ditandai besi tua, server menolak posting faktur besi tua untuk item produk (jalur stok/COGS).</span>}
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">

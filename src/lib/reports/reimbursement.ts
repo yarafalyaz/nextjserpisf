@@ -196,7 +196,7 @@ export function evaluateReimbursementApprovedAmount(input: {
     return {
       ok: false,
       error:
-        "Nominal disetujui melebihi nominal bukti — selisih lebih bukan reimbursement (BR-RB-05/vonis 018-V Putusan 4). Koreksi nominal sebelum menyetujui.",
+        "Nominal disetujui melebihi nominal bukti – selisih lebih bukan reimbursement (BR-RB-05/vonis 018-V Putusan 4). Koreksi nominal sebelum menyetujui.",
     }
   }
   return { ok: true }

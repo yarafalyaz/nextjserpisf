@@ -226,7 +226,7 @@ export default async function WarrantyClaimDetailPage({
           .then((rows) =>
             rows.map((r) => ({
               value: String(r.id),
-              label: `${r.documentNo} — ${r.purchaseOrder.vendor.name}`,
+              label: `${r.documentNo} - ${r.purchaseOrder.vendor.name}`,
             })),
           )
       : Promise.resolve([]),

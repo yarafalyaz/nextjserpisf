@@ -77,7 +77,7 @@ function round2(n: number): number {
  * hilang atau salah tipe, sehingga operator harus tahu dari log.
  */
 export const GR_LANDED_COST_WARNING_SHIPPING_BLENDED =
-  "PUR-BR-008 V1/V2: akun ongkir (purchaseShippingAccountId) kosong atau bukan akun persediaan/aset — ongkir digabung ke satu debit Persediaan sehingga rinciannya tidak tampil di jurnal. Petakan akun ongkir bertipe aset (mis. 110405 Persediaan — Ongkos Angkut Masuk) bila rincian ongkir diinginkan."
+  "PUR-BR-008 V1/V2: akun ongkir (purchaseShippingAccountId) kosong atau bukan akun persediaan/aset, ongkir digabung ke satu debit Persediaan sehingga rinciannya tidak tampil di jurnal. Petakan akun ongkir bertipe aset (mis. 110405 Persediaan, Ongkos Angkut Masuk) bila rincian ongkir diinginkan."
 
 export const GR_LANDED_COST_WARNING_ADMIN_ASSET_ACCOUNT =
   "PUR-BR-008 V3: akun beban admin bank (purchaseAdminFeeAccountId) dipetakan ke akun bertipe ASSET/persediaan. Biaya admin bank adalah beban periode; memetakannya ke akun aset akan mengapitalisasinya lewat neraca. Petakan ke akun beban (mis. 720002 Beban Adm. Bank)."
@@ -269,7 +269,7 @@ export const stockJournalService = {
         // V3 melarang kapitalisasi admin; tanpa akun beban tidak ada perlakuan
         // sah yang tersisa, jadi tolak dengan pesan bernama (fail-closed).
         throw new Error(
-          "Akun beban admin bank (purchaseAdminFeeAccountId) belum dipetakan di Pengaturan → Mapping Akun. Biaya admin bank adalah beban periode — tidak boleh dikapitalisasi ke persediaan — sehingga penerimaan ini tidak bisa dijurnal.",
+          "Akun beban admin bank (purchaseAdminFeeAccountId) belum dipetakan di Pengaturan → Mapping Akun. Biaya admin bank adalah beban periode, tidak boleh dikapitalisasi ke persediaan, sehingga penerimaan ini tidak bisa dijurnal.",
         )
       }
       if (accountTypes.get(accounts.purchaseAdminFee) === "ASSET") {

@@ -366,7 +366,7 @@ function conflictMessage(
     `${arah} ditolak: item #${first.itemId}${extra} sudah dikeluarkan ` +
     `sebanyak ${first.alreadyOutQty} lewat ${lawan}${doc} untuk ` +
     `kebutuhan proyek/penjualan yang sama (SAL-BR-014). Satu kebutuhan ` +
-    `material hanya boleh mengurangi stok satu kali — batalkan salah ` +
+    `material hanya boleh mengurangi stok satu kali, batalkan salah ` +
     `satu jalur (void faktur atau batalkan pengeluaran material) ` +
     `sebelum melanjutkan.`
   )

@@ -54,7 +54,7 @@ export function DeleteButton({ id, action, onSuccess, label = "Hapus" }: DeleteB
         disabled={isPending}
         variant="destructive"
         size="sm"
-        className="min-h-11 min-w-11"
+        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9"
         aria-label={label}
       >
         <Trash2 size={15} aria-hidden="true" />

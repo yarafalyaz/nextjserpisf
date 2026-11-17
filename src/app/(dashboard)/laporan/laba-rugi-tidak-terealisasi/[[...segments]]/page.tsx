@@ -25,7 +25,7 @@ export default async function UnrealisedIncomeStatementPage({
         basePath: "/laporan/laba-rugi-tidak-terealisasi",
         pdfSlug: "laba-rugi-tidak-terealisasi",
         exportTitle: "Laba Rugi Tidak Terealisasi",
-        footnote: "Laporan ini memuat laba/rugi dari jurnal berstatus DRAFT — transaksi yang belum diposting. Angkanya masih dapat berubah dan belum menjadi bagian dari laporan keuangan final.",
+        footnote: "Laporan ini memuat laba/rugi dari jurnal berstatus DRAFT – transaksi yang belum diposting. Angkanya masih dapat berubah dan belum menjadi bagian dari laporan keuangan final.",
       }}
     />
   )

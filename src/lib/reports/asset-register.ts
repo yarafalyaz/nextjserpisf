@@ -200,7 +200,7 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
       kind: "notice",
       text:
         "Perhatian: ada aset dengan nilai buku negatif. Akumulasi penyusutan melebihi harga " +
-        "perolehan — periksa nilai residu dan tarif penyusutan kategorinya.",
+        "perolehan – periksa nilai residu dan tarif penyusutan kategorinya.",
     })
   }
 

@@ -90,7 +90,7 @@ export default async function StockReconciliationPage() {
                 <DetailTableTd colSpan={6} className="text-center text-success py-8">
                   {scopeWarehouseIds !== undefined
                     ? "Tidak ada selisih pada item yang tampil dalam cakupan gudang."
-                    : "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO."}
+                    : "Semua item seimbang – jumlah induk sama dengan total lapisan FIFO."}
                 </DetailTableTd>
               </DetailTableRow>
             )}

@@ -111,7 +111,7 @@ export function assertWorkOrderEligibleForChangeOrder(input: {
 }): void {
   if (!input.quotationId) {
     throw new Error(
-      "Perintah Kerja tanpa penawaran tertaut tidak dapat dibuatkan change order — tidak ada sumber nilai kontrak tunggal (BR-CO-10).",
+      "Perintah Kerja tanpa penawaran tertaut tidak dapat dibuatkan change order – tidak ada sumber nilai kontrak tunggal (BR-CO-10).",
     )
   }
   if (
@@ -197,7 +197,7 @@ export function assertLinesNotLocked(
   )
   if (conflict) {
     throw new Error(
-      `Baris perintah kerja #${conflict.workOrderItemId} sudah pernah dikeluarkan lewat Pengeluaran Material (MaterialIssueItem tertaut) dan terkunci — penggantian part berjalan lewat jalur Pengeluaran Material/retur, bukan change order. (Penjaga CO memakai SEMUA status MaterialIssue, lebih ketat dari guard revisi existing yang hanya completed.)`,
+      `Baris perintah kerja #${conflict.workOrderItemId} sudah pernah dikeluarkan lewat Pengeluaran Material (MaterialIssueItem tertaut) dan terkunci – penggantian part berjalan lewat jalur Pengeluaran Material/retur, bukan change order. (Penjaga CO memakai SEMUA status MaterialIssue, lebih ketat dari guard revisi existing yang hanya completed.)`,
     )
   }
 }

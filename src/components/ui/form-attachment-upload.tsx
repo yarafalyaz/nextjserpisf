@@ -133,7 +133,8 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
                   variant="danger-soft"
                   size="sm"
                   isIconOnly
-                  className="form-attachment-remove"
+                  // Tinggi kotak tetap 28px; ::before melebarkan area sentuh ke 44px.
+                  className="form-attachment-remove relative before:absolute before:-inset-2 before:content-['']"
                   aria-label={`Hapus lampiran ${file.originalName}`}
                   onPress={() => handleRemoveFile(file.id)}
                 >
@@ -147,7 +148,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
           type="button"
           variant="secondary"
           size="sm"
-          className="form-attachment-upload-btn"
+          className="form-attachment-upload-btn min-h-11"
           onPress={() => fileInputRef.current?.click()}
           isDisabled={uploading}
           aria-controls={fileInputId}

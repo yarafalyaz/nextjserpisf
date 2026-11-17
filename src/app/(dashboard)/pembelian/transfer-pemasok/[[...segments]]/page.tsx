@@ -147,7 +147,7 @@ export default async function VendorTransferPage({
         <div>
           <h1 className="text-2xl font-bold text-foreground">Transfer Pemasok</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Daftar instruksi transfer bank ke pemasok untuk pembayaran yang tercatat pada {month.label} —
+            Daftar instruksi transfer bank ke pemasok untuk pembayaran yang tercatat pada {month.label},
             termasuk yang masih berstatus draft (belum dikonfirmasi, jadi jurnalnya belum dibuat).
             Menandai transfer tidak membuat jurnal.
           </p>

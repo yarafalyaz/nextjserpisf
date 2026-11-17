@@ -14,7 +14,7 @@
 export const MAPPING_UNSET = "Belum diset"
 
 /** Mapping terisi tetapi akunnya tidak bisa dipakai (terhapus/nonaktif/induk). */
-export const MAPPING_INVALID = "Akun tidak valid — set ulang"
+export const MAPPING_INVALID = "Akun tidak valid – set ulang"
 
 export interface MappingAccountRow {
   id: number

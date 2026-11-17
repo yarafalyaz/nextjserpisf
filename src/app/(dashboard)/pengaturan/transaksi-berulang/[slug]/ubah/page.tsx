@@ -55,7 +55,7 @@ export default async function EditRecurringTransactionPage({ params }: { params:
       ]} />
       <h1 className="text-2xl font-bold text-foreground">Ubah Jadwal Transaksi Berulang</h1>
       <RecurringTransactionForm
-        accounts={accounts.map((a) => ({ id: a.id, label: `${a.code} — ${a.name}` }))}
+        accounts={accounts.map((a) => ({ id: a.id, label: `${a.code} - ${a.name}` }))}
         expenseCategories={categories.map((c) => ({ id: c.id, label: c.label }))}
         schedule={{
           id: schedule.id,

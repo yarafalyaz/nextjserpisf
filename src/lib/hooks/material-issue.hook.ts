@@ -58,7 +58,7 @@ export async function resolveMaterialIssueScrapSnapshots(
     const v = byItem.get(r.itemId) ?? null;
     if (v != null && (v < 0 || v > 100)) {
       throw new Error(
-        `Allowance scrap item #${r.itemId} di luar rentang 0–100% — perbaiki revisi BOM, penyelesaian tidak memakai nilai karangan.`,
+        `Allowance scrap item #${r.itemId} di luar rentang 0–100%, perbaiki revisi BOM, penyelesaian tidak memakai nilai karangan.`,
       );
     }
     out.set(r.itemId, v);

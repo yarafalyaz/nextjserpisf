@@ -130,7 +130,7 @@ export default async function QuotationPriceHistoryPage({
       {!selectedCustomer && (
         <p className="doc-lines">
           Pilih pelanggan untuk melihat riwayat harga penawaran pelanggan tersebut. Riwayat ini
-          menampilkan harga yang pernah ditawarkan pada penawaran — bukan harga transaksi.
+          menampilkan harga yang pernah ditawarkan pada penawaran, bukan harga transaksi.
         </p>
       )}
 
@@ -144,7 +144,7 @@ export default async function QuotationPriceHistoryPage({
         <>
           <p className="doc-lines">{history.notice}</p>
           <p className="doc-lines">
-            {history.revisiBerjalanLabel} — harga dari baris penawaran yang sedang berjalan;
+            {history.revisiBerjalanLabel}, harga dari baris penawaran yang sedang berjalan;
             {history.menyertakanDraft
               ? " saringan draft menyala."
               : " draft tidak disertakan."}
@@ -213,7 +213,7 @@ export default async function QuotationPriceHistoryPage({
           {history.pasangan.map((pair) => (
             <ReportSection
               key={`detail-${pair.customerId}-${pair.itemId}`}
-              title={`Kejadian Penawaran — ${pair.itemName ?? "Barang"} (${pair.itemSku ?? "—"})`}
+              title={`Kejadian Penawaran: ${pair.itemName ?? "Barang"} (${pair.itemSku ?? ", "})`}
               description={pair.hitunganPerEmber
                 .map((bucket) => `${bucket.label}: ${bucket.count}`)
                 .join(" · ")}
