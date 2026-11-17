@@ -32,8 +32,13 @@ describe("ledger-cash-data: harness perf ledgerRows", () => {
   const src = fs.readFileSync(FILE, "utf8")
   const body = bodyOf("ledgerRows", src)
 
-  it("saldo awal scoped satu akun (sumNetForAccount accountId), bukan agregasi semua akun", () => {
-    expect(body).toContain("sumNetForAccount(accountId")
+  it("saldo awal scoped akun (accountId + turunannya), bukan agregasi semua akun", () => {
+    // Sejak audit 2026-11-17 buku besar akun INDUK ikut memuat turunannya
+    // (paritas layar), jadi pemanggilannya `sumNetForAccounts(scopeIds)` —
+    // tetap agregat DB ter-scope, bukan `sumEntriesByAccount` tanpa accountIds
+    // yang mengagregasi SELURUH akun lalu mengambil satu dari Map.
+    expect(body).toContain("sumNetForAccounts(scopeIds")
+    expect(body).toContain("scopeIds")
     expect(body).not.toContain("sumEntriesByAccount({ date")
   })
 

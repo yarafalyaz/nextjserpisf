@@ -12,8 +12,9 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
-import { REPORT_JOURNAL_STATUSES, sumEntriesByAccount, sumNetForAccount } from "@/lib/services/report-aggregation.service"
+import { REPORT_JOURNAL_STATUSES, sumEntriesByAccount, sumNetForAccounts } from "@/lib/services/report-aggregation.service"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { collectDescendantAccountIds } from "@/lib/reports/account-hierarchy"
 import {
   RECOGNISED_AP_STATUSES,
   RECOGNISED_AR_STATUSES,
@@ -132,8 +133,11 @@ async function ledgerRows(
   accountId: number | null,
   period: Period,
   emptyHint: string,
+  /** Akun turunan saat `accountId` adalah akun induk (paritas layar, audit 2026-11-17). */
+  descendantIds: number[] = [],
 ): Promise<LedgerReportView> {
-  if (!accountId) {
+  const scopeIds = descendantIds.length > 1 ? descendantIds : accountId ? [accountId] : []
+  if (!accountId || scopeIds.length === 0) {
     return {
       table: {
         columns: LEDGER_COLUMNS,
@@ -152,10 +156,10 @@ async function ledgerRows(
   // `select` sempit di entries: kolom penuh baris jurnal tak pernah dibaca
   // pemanggil (hanya memo/debit/credit + jurnal tertaut).
   const [openingRaw, entries] = await Promise.all([
-    sumNetForAccount(accountId, { date: { lt: period.start } }),
+    sumNetForAccounts(scopeIds, { date: { lt: period.start } }),
     prisma.journalEntry.findMany({
       where: {
-        accountId,
+        accountId: { in: scopeIds },
         journal: {
           status: { in: [...REPORT_JOURNAL_STATUSES] },
           deletedAt: null,
@@ -215,11 +219,23 @@ async function resolveAccountId(kind: "slug-or-id", key: string | null): Promise
 
 /** Buku Besar: akun dari slug/id path (`akun=<slug>`). */
 export async function loadGeneralLedger(period: Period, accountKey: string | null): Promise<LedgerReportView> {
+  const accountId = await resolveAccountId("slug-or-id", accountKey)
+  // Paritas layar: memilih akun INDUK harus memuat mutasi seluruh turunannya.
+  // Tanpa ini PDF kosong untuk akun induk walau layar menampilkan puluhan baris
+  // dari URL yang sama (audit 2026-11-17).
+  const descendantIds = accountId ? await accountDescendantIds(accountId) : []
   return ledgerRows(
-    await resolveAccountId("slug-or-id", accountKey),
+    accountId,
     period,
     "Pilih akun terlebih dahulu (parameter akun=<slug/id>) untuk menampilkan buku besar.",
+    descendantIds,
   )
+}
+
+/** Akun + seluruh turunannya (hierarki parentId), id akun dasar selalu ikut. */
+async function accountDescendantIds(accountId: number): Promise<number[]> {
+  const all = await prisma.account.findMany({ select: { id: true, parentId: true } })
+  return collectDescendantAccountIds(all, accountId)
 }
 
 /**

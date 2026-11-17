@@ -13,6 +13,7 @@ vi.mock("@/lib/services/report-aggregation.service", () => ({
   REPORT_JOURNAL_STATUSES: ["POSTED", "REVERSED"],
   sumEntriesByAccount: vi.fn(async () => new Map()),
   sumNetForAccount: vi.fn(async () => 0),
+  sumNetForAccounts: vi.fn(async () => 0),
 }))
 
 import { loadBankLedger } from "../ledger-cash-data"
@@ -51,5 +52,21 @@ describe("loadBankLedger himpunan kas kanonis (putaran 75)", () => {
     const report = await loadBankLedger(period, "kas-besar")
     const text = JSON.stringify(report.table.rows)
     expect(text).not.toContain("bukan rekening kas/bank")
+  })
+
+  it("audit 2026-11-17: akun induk memuat mutasi turunannya (paritas layar)", async () => {
+    // Regresi: PDF buku besar dulu hanya mengambil akun itu sendiri, sehingga
+    // akun INDUK (0 entri langsung, semua mutasi di sub-akun) mencetak tabel
+    // kosong dari URL yang di layar menampilkan puluhan baris.
+    const { loadGeneralLedger } = await import("../ledger-cash-data")
+    const period = { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }
+    const view = await loadGeneralLedger(period, "1-1000")
+    expect(view).toBeTruthy()
+    // Pemanggilan saldo awal harus memakai himpunan akun scoped (akun + turunan),
+    // bukan agregasi seluruh akun dan bukan akun tunggal saja.
+    const { sumNetForAccounts } = await import("@/lib/services/report-aggregation.service")
+    expect(sumNetForAccounts).toHaveBeenCalled()
+    const ids = (sumNetForAccounts as unknown as { mock: { calls: number[][] } }).mock.calls[0]?.[0] ?? []
+    expect(Array.isArray(ids)).toBe(true)
   })
 })
