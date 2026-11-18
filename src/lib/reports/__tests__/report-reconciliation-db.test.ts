@@ -83,6 +83,7 @@ describe.skipIf(SKIP)("rekonsiliasi laporan inti vs SQL mentah (DB, read-only)",
       JOIN accounts a ON a.id = je.account_id AND a.is_active = 1
       GROUP BY je.account_id, a.code, a.name, a.type
       HAVING SUM(je.debit) <> 0 OR SUM(je.credit) <> 0
+      ORDER BY a.code ASC
     `
 
     // Benteng: akun NONAKTIF yang masih membawa saldo = uang yang tidak akan

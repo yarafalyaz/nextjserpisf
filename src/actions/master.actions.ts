@@ -33,6 +33,7 @@ import {
   uomServerSchema,
   employeeDatesSchema,
 } from "@/lib/validations/schemas";
+import { dateOnly } from "@/lib/validations/finance.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
@@ -4962,7 +4963,7 @@ export async function deleteCustomerCategory(id: number) {
 function parseCommissionRateForm(formData: FormData) {
   const customerCategoryId = Number(formData.get("customerCategoryId"))
   const commissionPercent = Number(formData.get("commissionPercent"))
-  const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "")
+  const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim()
   const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim()
   if (!Number.isInteger(customerCategoryId) || customerCategoryId <= 0) {
     return { error: "Kategori pelanggan wajib dipilih" } as const
@@ -4970,12 +4971,16 @@ function parseCommissionRateForm(formData: FormData) {
   if (!Number.isFinite(commissionPercent)) {
     return { error: "Persen komisi tidak valid" } as const
   }
+  if (!dateOnly.safeParse(effectiveFromRaw).success) {
+    return { error: "Tanggal mulai berlaku tarif tidak valid" } as const
+  }
   const effectiveFrom = wibDateToUtcMidnight(effectiveFromRaw)
-  if (!effectiveFrom) return { error: "Tanggal mulai berlaku tarif tidak valid" } as const
   let effectiveTo: Date | null = null
   if (effectiveToRaw) {
+    if (!dateOnly.safeParse(effectiveToRaw).success) {
+      return { error: "Tanggal berakhir masa tarif tidak valid" } as const
+    }
     effectiveTo = wibDateToUtcMidnight(effectiveToRaw)
-    if (!effectiveTo) return { error: "Tanggal berakhir masa tarif tidak valid" } as const
   }
   return { customerCategoryId, commissionPercent, effectiveFrom, effectiveTo } as const
 }

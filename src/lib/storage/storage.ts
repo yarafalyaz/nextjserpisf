@@ -1,7 +1,9 @@
 import { writeFile, mkdir } from "fs/promises"
 import { randomUUID } from "crypto"
 import path from "path"
+import { Readable } from "stream"
 import { prisma } from "@/lib/db/prisma"
+import { R2_ACCOUNT_ID_REGEX, isValidHttpsBaseUrl } from "@/lib/validations/settings.schemas"
 
 /**
  * Storage abstraction. Config is DB-driven (SystemSetting) with env fallback.
@@ -140,9 +142,13 @@ export async function getStorageConfig(): Promise<StorageConfig> {
 
 /** Resolve a stored key (e.g. "logos/logo-123.png") to a public URL. */
 export function publicUrl(key: string, assetBaseUrl?: string): string {
-  const base = (assetBaseUrl ?? process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? "").replace(/\/$/, "")
+  const rawBase = (assetBaseUrl ?? process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? "").trim().replace(/\/+$/, "")
   const clean = key.replace(/^\/+/, "")
-  return base ? `${base}/${clean}` : `/uploads/${clean}`
+  if (!rawBase) return `/uploads/${clean}`
+  if (!isValidHttpsBaseUrl(rawBase)) {
+    throw new Error("Asset Base URL harus berupa URL https:// yang valid.")
+  }
+  return `${rawBase}/${clean}`
 }
 
 // R7PB-01: kategori privat — scan tanda tangan jabatan & avatar pengguna
@@ -230,11 +236,15 @@ async function uploadToPrivate(key: string, buffer: Buffer): Promise<void> {
   await writeFile(fullPath, buffer)
 }
 
-/** Build an R2 (S3-compatible) client from config. Throws if incomplete. */
+/** Build an R2 (S3-compatible) client from config. Throws if incomplete or unsafe. */
 async function r2Client(config: StorageConfig) {
   const { r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2Bucket } = config
   if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey || !r2Bucket) {
     throw new Error("Cloudflare R2 belum dikonfigurasi lengkap. Lengkapi di Pengaturan > Penyimpanan.")
+  }
+  const cleanAccountId = r2AccountId.trim()
+  if (!R2_ACCOUNT_ID_REGEX.test(cleanAccountId)) {
+    throw new Error("ID Akun Cloudflare R2 tidak valid.")
   }
   // Lazy, bundler-ignored import so @aws-sdk/client-s3 stays an OPTIONAL dependency.
   // Install it only when you actually enable the R2 driver.
@@ -242,7 +252,7 @@ async function r2Client(config: StorageConfig) {
   const sdk = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ sdkName)
   const client = new sdk.S3Client({
     region: "auto",
-    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+    endpoint: `https://${cleanAccountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: r2AccessKeyId, secretAccessKey: r2SecretAccessKey },
   })
   return { client, sdk, bucket: r2Bucket }
@@ -254,26 +264,34 @@ async function r2Client(config: StorageConfig) {
  */
 async function uploadToR2(
   key: string,
-  buffer: Buffer,
+  body: Buffer | Readable,
   contentType: string,
-  config: StorageConfig
+  config: StorageConfig,
+  contentLength?: number
 ): Promise<void> {
   const { client, sdk, bucket } = await r2Client(config)
   await client.send(
-    new sdk.PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType })
+    new sdk.PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      ...(contentLength !== undefined ? { ContentLength: contentLength } : {}),
+    })
   )
 }
 
-/** Upload an arbitrary buffer to R2 if the active driver is "r2". No-op otherwise.
+/** Upload a buffer or readable stream to R2 if the active driver is "r2". No-op otherwise.
  *  Used for offsite copies (e.g. database backups). Returns true if uploaded. */
 export async function uploadToCloudIfEnabled(
   key: string,
-  buffer: Buffer,
-  contentType: string
+  body: Buffer | Readable,
+  contentType: string,
+  contentLength?: number
 ): Promise<boolean> {
   const config = await getStorageConfig()
   if (config.driver !== "r2") return false
-  await uploadToR2(key, buffer, contentType, config)
+  await uploadToR2(key, body, contentType, config, contentLength)
   return true
 }
 
@@ -293,6 +311,30 @@ export async function downloadFromCloud(key: string): Promise<Buffer> {
   const res = await client.send(new sdk.GetObjectCommand({ Bucket: bucket, Key: key }))
   const bytes = await res.Body.transformToByteArray()
   return Buffer.from(bytes)
+}
+
+/** Download an object from R2 as a Node Readable stream. */
+export async function downloadFromCloudStream(key: string): Promise<Readable> {
+  const config = await getStorageConfig()
+  const { client, sdk, bucket } = await r2Client(config)
+  const res = await client.send(new sdk.GetObjectCommand({ Bucket: bucket, Key: key }))
+  const body = res.Body as unknown
+  if (!body) {
+    throw new Error("Objek cloud kosong")
+  }
+  if (body instanceof Readable || typeof (body as { pipe?: unknown }).pipe === "function") {
+    return body as Readable
+  }
+  if (typeof (body as { transformToWebStream?: unknown }).transformToWebStream === "function") {
+    return Readable.fromWeb(
+      (body as { transformToWebStream: () => import("stream/web").ReadableStream }).transformToWebStream()
+    )
+  }
+  if (typeof (body as { transformToByteArray?: unknown }).transformToByteArray === "function") {
+    const bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray()
+    return Readable.from(Buffer.from(bytes))
+  }
+  throw new Error("Format respons cloud tidak didukung")
 }
 
 /** Delete an object from R2 (no-op when driver != r2). */

@@ -40,6 +40,7 @@ vi.mock("fs/promises", () => ({
   mkdir: (...args: unknown[]) => mkdirMock(...args),
 }))
 
+import { Readable } from "stream"
 import {
   publicUrl,
   getStorageConfig,
@@ -47,6 +48,7 @@ import {
   uploadToCloudIfEnabled,
   listCloudKeys,
   downloadFromCloud,
+  downloadFromCloudStream,
   deleteFromCloud,
 } from "../storage"
 
@@ -100,6 +102,12 @@ describe("publicUrl", () => {
   it("falls back to NEXT_PUBLIC_ASSET_BASE_URL env", () => {
     process.env.NEXT_PUBLIC_ASSET_BASE_URL = "https://env-cdn.test"
     expect(publicUrl("a/b.png")).toBe("https://env-cdn.test/a/b.png")
+  })
+
+  it("rejects unsafe or non-https assetBaseUrl schemes", () => {
+    for (const bad of ["javascript:alert(1)", "data:text/html,<script>", "http://cdn.test", "//evil.com"]) {
+      expect(() => publicUrl("logos/x.png", bad), bad).toThrow(/https:\/\//)
+    }
   })
 })
 
@@ -291,12 +299,14 @@ describe("cloud helpers are no-ops on the local driver", () => {
   })
 })
 
-function mockR2Config(overrides: Partial<{ fallbackLocal: boolean; assetBaseUrl: string | null }> = {}) {
+function mockR2Config(
+  overrides: Partial<{ fallbackLocal: boolean; assetBaseUrl: string | null; r2AccountId: string }> = {},
+) {
   findFirstMock.mockResolvedValue({
     storageDriver: "r2",
     storageFallbackLocal: overrides.fallbackLocal ?? true,
     assetBaseUrl: overrides.assetBaseUrl ?? "https://r2.test",
-    r2AccountId: "acct-123",
+    r2AccountId: overrides.r2AccountId ?? "0123456789abcdef0123456789abcdef",
     r2AccessKeyId: "ak",
     r2SecretAccessKey: "sk",
     r2Bucket: "my-bucket",
@@ -391,5 +401,21 @@ describe("R2 cloud helpers on the r2 driver", () => {
     sendMock.mockResolvedValue({})
     await deleteFromCloud("logos/a.png")
     expect(sendMock).toHaveBeenCalledOnce()
+  })
+
+  it("rejects SSRF/invalid r2AccountId inside r2Client before sending S3 request", async () => {
+    for (const badId of ["evil.com/x#", "acct-123", "short"]) {
+      mockR2Config({ r2AccountId: badId })
+      await expect(listCloudKeys("backups/"), badId).rejects.toThrow(/ID Akun Cloudflare R2 tidak valid/)
+      expect(sendMock).not.toHaveBeenCalled()
+    }
+  })
+
+  it("downloadFromCloudStream returns a Readable stream without buffering into byte array", async () => {
+    sendMock.mockResolvedValue({ Body: Readable.from([Buffer.from("chunk-1")]) })
+    const stream = await downloadFromCloudStream("backups/db.sql")
+    const chunks: Buffer[] = []
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+    expect(Buffer.concat(chunks).toString()).toBe("chunk-1")
   })
 })

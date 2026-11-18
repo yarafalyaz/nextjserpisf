@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface VehicleModelFormProps {
   brands: { id: number; name: string
@@ -52,7 +53,16 @@ export function VehicleModelForm({ brands, model, defaultBrandId }: VehicleModel
   }
 
   return (
-    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={model?.id ? "Formulir ubah model kendaraan" : "Formulir tambah model kendaraan"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={model?.id ? "Formulir ubah model kendaraan" : "Formulir tambah model kendaraan"}
+      className={
+        model?.id
+          ? "bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6"
+          : "sm:bg-surface sm:rounded-xl sm:border sm:border-default sm:shadow-sm sm:p-6"
+      }
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="vehicleBrandId">Merek Kendaraan <span className="text-destructive" aria-hidden="true">*</span></Label>
@@ -71,10 +81,10 @@ export function VehicleModelForm({ brands, model, defaultBrandId }: VehicleModel
           <Input id="name" name="name" required placeholder="Contoh: Avanza" defaultValue={model?.name ?? ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()}>Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : model?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" className="w-full md:w-auto min-h-11 md:min-h-9" onPress={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" className="w-full md:w-auto min-h-11 md:min-h-9" isDisabled={isPending}>{isPending ? "Menyimpan..." : model?.id ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

@@ -59,16 +59,19 @@ interface OptionRowProps {
   onCheckedChange: (checked: boolean) => void
 }
 
+const PRESET_BUTTON_CLASS =
+  "inline-flex min-h-11 md:min-h-8 cursor-pointer items-center justify-center px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+
 function OptionRow({ id, label, hint, checked, onCheckedChange }: OptionRowProps) {
   return (
-    <div className="flex items-start gap-2">
+    <div className="flex min-h-11 md:min-h-9 items-start gap-2">
       <Checkbox
         id={id}
         checked={checked}
         onCheckedChange={(value) => onCheckedChange(value === true)}
-        className="mt-0.5"
+        className="mt-0.5 cursor-pointer"
       />
-      <label htmlFor={id} className="cursor-pointer text-sm text-foreground">
+      <label htmlFor={id} className="min-h-11 md:min-h-9 cursor-pointer text-sm text-foreground">
         {label}
         <span className="block text-xs text-muted-foreground">{hint}</span>
       </label>
@@ -145,7 +148,7 @@ export function StatementOptions({
                 const now = new Date()
                 setPreset(new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
               }}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Bulan Ini
             </button>
@@ -155,7 +158,7 @@ export function StatementOptions({
                 const now = new Date()
                 setPreset(new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0))
               }}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Bulan Lalu
             </button>
@@ -166,7 +169,7 @@ export function StatementOptions({
                 const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
                 setPreset(new Date(now.getFullYear(), quarterStartMonth, 1), new Date(now.getFullYear(), quarterStartMonth + 3, 0))
               }}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Kuartal Ini
             </button>
@@ -176,7 +179,7 @@ export function StatementOptions({
                 const now = new Date()
                 setPreset(new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
               }}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Tahun Ini (YTD)
             </button>
@@ -186,7 +189,7 @@ export function StatementOptions({
             <button
               type="button"
               onClick={() => setAsOfPreset(new Date())}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Hari Ini
             </button>
@@ -196,7 +199,7 @@ export function StatementOptions({
                 const now = new Date()
                 setAsOfPreset(new Date(now.getFullYear(), now.getMonth(), 0))
               }}
-              className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+              className={PRESET_BUTTON_CLASS}
             >
               Akhir Bulan Lalu
             </button>
@@ -228,7 +231,7 @@ export function StatementOptions({
       {/* Collapsed by default: the options are a viewing preference most operators
           set once, and leaving them open pushed the report itself below the fold. */}
       <Collapsible open={open} onOpenChange={setOpen} className="border-t border-default pt-2">
-        <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-secondary">
+        <CollapsibleTrigger className="group flex min-h-11 md:min-h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-secondary">
           <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-colors group-data-[state=open]:rotate-90" />
           <span className="text-sm font-semibold text-foreground">Parameter Tambahan</span>
           {changedCount > 0 && <Badge variant="outline">{changedCount} disesuaikan</Badge>}

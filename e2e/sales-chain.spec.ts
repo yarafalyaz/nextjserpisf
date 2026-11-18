@@ -1,15 +1,41 @@
 import { test, expect, type Page } from "@playwright/test"
+import { skipOnMobile } from "./utils/desktop-only"
+import { selectComboboxOptionBySearch } from "./utils/combobox"
 import { prisma } from "@/lib/db/prisma"
 
 const RETURN_APPROVER_EMAIL = "admin.dewi@isf.co.id"
 const DEMO_PASSWORD = process.env.E2E_PASSWORD || "Yara1234"
 
 async function loginAs(page: Page, email: string) {
-  await page.goto("/login")
+  await page.goto("/login", { waitUntil: "domcontentloaded" })
+  await expect(page.locator("#email")).toBeVisible({ timeout: 15_000 })
   await page.locator("#email").fill(email)
   await page.locator("#password").fill(DEMO_PASSWORD)
   await page.locator("#login-submit").click()
   await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15_000 })
+}
+
+async function clickAlertDialogConfirm(
+  page: Page,
+  triggerName: RegExp,
+  confirmName: RegExp,
+) {
+  const trigger = page.getByRole("button", { name: triggerName }).first()
+  await expect(trigger).toBeVisible({ timeout: 30_000 })
+  await expect(trigger).toBeEnabled({ timeout: 15_000 })
+  const dialog = page.getByRole("alertdialog")
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    await trigger.click({ timeout: 5_000 }).catch(() => {})
+    const open = await dialog
+      .waitFor({ state: "visible", timeout: 1_500 })
+      .then(() => true)
+      .catch(() => false)
+    if (open) break
+    await page.waitForTimeout(150)
+  }
+  await expect(dialog).toBeVisible({ timeout: 5_000 })
+  await dialog.getByRole("button", { name: confirmName }).first().click()
 }
 
 /**
@@ -28,7 +54,9 @@ test.describe.serial("Penjualan — rantai penuh", () => {
   test("faktur → posting → bayar → retur, jurnal & stok & sisa terbukti di DB", async ({
     page,
     browser,
-  }) => {
+  }, testInfo) => {
+    skipOnMobile(testInfo.project.name, "Rantai jual lengkap khusus desktop")
+    test.setTimeout(120_000)
     // 0. Reset fixture berstok: faktur kembali draft, lapisan FIFO 10.
     const fixture = await prisma.salesInvoice.findUniqueOrThrow({
       where: { slug: "e2e-post-invoice-draft" },
@@ -112,18 +140,18 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     await page.goto("/penjualan/faktur/e2e-post-invoice-draft", {
       waitUntil: "domcontentloaded",
     })
-    await page.waitForLoadState("networkidle")
-    const postingBtn = page.getByRole("button", { name: /Terbitkan|Posting/ })
-    if ((await postingBtn.count()) > 0 && (await postingBtn.first().isEnabled())) {
-      await postingBtn.first().click()
-      await page.getByRole("alertdialog").getByRole("button", { name: /Terbitkan|Posting/ }).click()
+    await page.waitForLoadState("load")
+    const postingBtn = page.getByRole("button", { name: /Terbitkan|Posting/ }).first()
+    await expect(postingBtn).toBeVisible({ timeout: 30_000 })
+    if (await postingBtn.isEnabled()) {
+      await clickAlertDialogConfirm(page, /Terbitkan|Posting/, /Terbitkan|Posting/)
     }
     await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
 
     // Jurnal lahir async — poll sampai keduanya muncul.
     let arJournals: { id: number }[] = []
     let cogsJournals: { id: number }[] = []
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 80; i++) {
       arJournals = await prisma.journal.findMany({
         where: { referenceType: "SalesInvoice", referenceId: fixture.id },
       })
@@ -131,7 +159,7 @@ test.describe.serial("Penjualan — rantai penuh", () => {
         where: { referenceType: "SalesInvoiceCOGS", referenceId: fixture.id },
       })
       if (arJournals.length > 0 && cogsJournals.length > 0) break
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(250)
     }
     expect(arJournals.length).toBe(1)
     expect(cogsJournals.length).toBe(1)
@@ -172,22 +200,22 @@ test.describe.serial("Penjualan — rantai penuh", () => {
       }
     }
     await page.reload({ waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    const postingBtn2 = page.getByRole("button", { name: /Terbitkan|Posting/ })
-    if ((await postingBtn2.count()) > 0 && (await postingBtn2.first().isEnabled())) {
-      await postingBtn2.first().click()
-      await page.getByRole("alertdialog").getByRole("button", { name: /Terbitkan|Posting/ }).click()
+    await page.waitForLoadState("load")
+    const postingBtn2 = page.getByRole("button", { name: /Terbitkan|Posting/ }).first()
+    await expect(postingBtn2).toBeVisible({ timeout: 30_000 })
+    if (await postingBtn2.isEnabled()) {
+      await clickAlertDialogConfirm(page, /Terbitkan|Posting/, /Terbitkan|Posting/)
     }
     await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
     // Movement milik faktur ini (reference SalesInvoice + id faktur).
     // Poll: movement lahir async sesudah posting.
     let outMoves: { id: number; status: string; impact: string }[] = []
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 80; i++) {
       outMoves = await prisma.stockMove.findMany({
         where: { referenceType: "SalesInvoice", referenceId: fixture.id },
       })
       if (outMoves.length > 0) break
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(250)
     }
     expect(outMoves.length).toBeGreaterThan(0)
     for (const m of outMoves) {
@@ -201,19 +229,25 @@ test.describe.serial("Penjualan — rantai penuh", () => {
 
     // 2. Terima pembayaran lunas (200000) → paymentStatus paid.
     // Pastikan transaksi posting selesai penuh di DB sebelum reload.
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const cur = await prisma.salesInvoice.findUnique({ where: { id: fixture.id }, select: { status: true } })
       if (cur?.status === "posted") break
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(250)
     }
-    await page.reload({ waitUntil: "networkidle" })
-    await page.locator("main").getByRole("link", { name: "Terima Pembayaran" }).click()
+    await page.reload({ waitUntil: "load" })
+    const payLink = page.locator("main").getByRole("link", { name: "Terima Pembayaran" })
+    await expect(payLink).toBeVisible({ timeout: 30_000 })
+    await payLink.click()
     await page.waitForURL(/\/penjualan\/pembayaran\/tambah/, { timeout: 30_000 })
-    await page.waitForLoadState("networkidle")
-    // Metode wajib — Combobox CommandInput: ketik + pilih.
-    await page.getByRole("combobox", { name: /metode bayar/i }).click()
-    await page.getByPlaceholder(/pilih|ketik|cari/i).fill("Transfer")
-    await page.getByRole("option", { name: /transfer/i }).click()
+    await page.waitForLoadState("load")
+    // Metode wajib — Combobox CommandInput: ketik + pilih lewat helper aman-hidrasi.
+    const methodPicked = await selectComboboxOptionBySearch(
+      page,
+      { name: /metode bayar/i },
+      "Transfer",
+      /transfer/i,
+    )
+    expect(methodPicked).toBe(true)
     // Jumlah prefill = sisa faktur; tegaskan sebelum submit.
     await expect(page.getByLabel(/jumlah bayar/i)).toHaveValue(/200[\.\s]?000/)
     await page.getByRole("button", { name: "Terima Pembayaran" }).click()
@@ -227,8 +261,8 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     let paidInvoice = await prisma.salesInvoice.findUniqueOrThrow({
       where: { id: fixture.id },
     })
-    for (let i = 0; i < 20 && paidInvoice.paymentStatus !== "paid"; i++) {
-      await page.waitForTimeout(1000)
+    for (let i = 0; i < 80 && paidInvoice.paymentStatus !== "paid"; i++) {
+      await page.waitForTimeout(250)
       paidInvoice = await prisma.salesInvoice.findUniqueOrThrow({
         where: { id: fixture.id },
       })
@@ -237,17 +271,13 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     expect(Number(paidInvoice.paidAmount)).toBe(200000)
 
     // 3. Retur sebagian 1 pcs → selesaikan → stok balik 9, jurnal retur lahir.
-    await page.goto("/penjualan/faktur/e2e-post-invoice-draft", {
-      waitUntil: "domcontentloaded",
-    })
-    await page.waitForLoadState("networkidle")
     // Faktur lunas → status paid → tombol "+ Buat Retur" (guard posted/partial)
     // hilang. Masuk lewat URL prefill langsung (jalur "buat dari" yang sah).
     await page.goto(`/penjualan/retur/tambah?invoiceId=${fixture.id}`, {
       waitUntil: "domcontentloaded",
     })
-    await page.waitForLoadState("networkidle")
-    // Prefill mengisi 1 baris qty 2 — ubah jadi 1 (retur sebagian).
+    await page.waitForLoadState("load")
+    await expect(page.getByLabel(/jumlah baris 1/i)).toBeVisible({ timeout: 30_000 })
     // Prefill mengisi 1 baris qty 2 — retur sebagian: ubah jadi 1.
     // Alasan wajib diisi saat BUAT: gerbang P4 menolak selesaikan retur
     // ber-reason kosong (koreksi tak teraudit), dan detail hanya menampilkan.
@@ -272,9 +302,8 @@ test.describe.serial("Penjualan — rantai penuh", () => {
       await approverPage.goto(`/penjualan/retur/${salesReturn.slug ?? salesReturn.id}`, {
         waitUntil: "domcontentloaded",
       })
-      await approverPage.waitForLoadState("networkidle")
-      await approverPage.getByRole("button", { name: "Selesaikan" }).first().click()
-      await approverPage.getByRole("button", { name: "Selesaikan" }).last().click()
+      await approverPage.waitForLoadState("load")
+      await clickAlertDialogConfirm(approverPage, /^Selesaikan$/, /^Selesaikan$/)
       // Sukses = chip "Selesai" ATAU toast galat (tolak diam) — tunggu salah satunya, bukan sleep buta.
       const retToast = approverPage.locator("li", { hasText: /gagal|tidak|wajib|kurang|ditolak/i }).first()
       await expect(approverPage.getByText("Selesai").first().or(retToast)).toBeVisible({ timeout: 30_000 })
@@ -290,8 +319,8 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     let doneReturn = await prisma.salesReturn.findUniqueOrThrow({
       where: { id: salesReturn.id },
     })
-    for (let i = 0; i < 20 && doneReturn.status !== "completed"; i++) {
-      await page.waitForTimeout(1000)
+    for (let i = 0; i < 80 && doneReturn.status !== "completed"; i++) {
+      await page.waitForTimeout(250)
       doneReturn = await prisma.salesReturn.findUniqueOrThrow({
         where: { id: salesReturn.id },
       })

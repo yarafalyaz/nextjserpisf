@@ -37,8 +37,8 @@ import { buildFiscalYearRows } from "@/lib/finance/asset-fiscal-balance";
 import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { isRegisteredAssetUseStatus } from "@/lib/finance/asset-use-status";
-import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
-import { wibYearMonthCompact } from "@/lib/utils/date-only";
+import { getWibTodayUtcDate, wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
+import { wibDateOnly, wibYearMonthCompact } from "@/lib/utils/date-only";
 import { nextSlugWithClient } from "@/lib/utils/slug-db";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 
@@ -947,7 +947,7 @@ export async function createAsset(formData: FormData) {
     const purchaseCost = data.purchasePrice ?? 0;
     const acquisitionDate = data.purchaseDate
       ? wibDateToUtcMidnight(data.purchaseDate)
-      : new Date();
+      : getWibTodayUtcDate();
     // Aset hanya boleh LAHIR "active" (vonis F-2026-10-23-117-V): disposed
     // hanya lewat disposeAsset (jurnal pelepasan), held_for_sale hanya lewat
     // klasifikasi terstruktur, string lain tak terdaftar. Lahir disposed =
@@ -1359,7 +1359,7 @@ export async function disposeAsset(formData: FormData) {
     const proceeds = data.proceeds ?? 0;
     const disposalDate = data.disposalDate
       ? wibDateToUtcMidnight(data.disposalDate)
-      : new Date();
+      : getWibTodayUtcDate();
     const reason = data.reason || null;
 
     const asset = await prisma.asset.findUniqueOrThrow({
@@ -1429,15 +1429,22 @@ export async function disposeAsset(formData: FormData) {
           entries: { select: { accountId: true, debit: true, credit: true } },
         },
       });
-      // Tanggal disposal tidak boleh mendahului jurnal POSTED terakhir:
-      // nilai buku dihitung dari SEMUA jurnal POSTED, jadi disposal
-      // backdate akan mendebit akumulasi yang pada tanggal itu belum ada
-      // dan mencatat pelepasan sebelum beban terakhirnya sendiri.
-      const lastJournalTime = lockedJournals.reduce(
-        (max, j) => Math.max(max, j.transactionDate.getTime()),
-        0,
+      // Tanggal disposal tidak boleh mendahului hari kalender WIB jurnal POSTED
+      // terakhir: nilai buku dihitung dari SEMUA jurnal POSTED, jadi disposal
+      // backdate akan mendebit akumulasi yang pada tanggal itu belum ada dan
+      // mencatat pelepasan sebelum beban terakhirnya sendiri. Bandingkan per hari
+      // kalender WIB agar disposal di hari WIB yang sama tetap sah walau jurnal
+      // lama memakai timestamp non-tengah-malam, sambil tetap menolak tanggal
+      // pelepasan yang benar-benar sebelum hari WIB jurnal terakhir.
+      const disposalWibDate = wibDateOnly(disposalDate);
+      const lastJournalWibDate = lockedJournals.reduce<string | null>(
+        (max, j) => {
+          const d = wibDateOnly(j.transactionDate);
+          return max === null || d > max ? d : max;
+        },
+        null,
       );
-      if (lastJournalTime > 0 && disposalDate.getTime() < lastJournalTime) {
+      if (lastJournalWibDate !== null && disposalWibDate < lastJournalWibDate) {
         throw new Error(
           "Tanggal pelepasan tidak boleh sebelum tanggal jurnal aset terakhir. Majukan tanggal pelepasan atau balik jurnal yang lebih baru lebih dulu.",
         );

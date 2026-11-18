@@ -10,6 +10,7 @@ import { RecurringTransactionTable } from "./_components/recurring-transaction-t
 import { isDue } from "@/lib/reports/recurring-schedule"
 import { RecurringDueQueueCard } from "@/components/reports/recurring-due-queue-card"
 import { getRecurringDueQueue } from "@/lib/reports/recurring-due-queue-data"
+import { formatDate } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -31,8 +32,8 @@ export default async function RecurringTransactionsPage() {
     type: schedule.type,
     frequency: schedule.frequency,
     interval: schedule.interval,
-    nextRunDate: schedule.nextRunDate.toLocaleDateString("id-ID"),
-    lastRunAt: schedule.lastRunAt?.toLocaleDateString("id-ID") ?? null,
+    nextRunDate: formatDate(schedule.nextRunDate),
+    lastRunAt: schedule.lastRunAt ? formatDate(schedule.lastRunAt) : null,
     lastResult: schedule.lastResult,
     runCount: schedule.runCount,
     isActive: schedule.isActive,

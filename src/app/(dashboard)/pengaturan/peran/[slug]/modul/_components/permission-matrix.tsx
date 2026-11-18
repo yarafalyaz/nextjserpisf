@@ -96,7 +96,7 @@ export function PermissionMatrix({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Cari izin (mis. faktur, barang, pesanan pembelian)…"
           aria-label="Cari izin"
-          className="h-9 w-full max-w-xs rounded-lg border border-default bg-background px-3 text-sm outline-none focus:border-primary"
+          className="h-11 md:h-9 w-full max-w-xs rounded-lg border border-default bg-background px-3 text-sm outline-none focus:border-primary"
         />
         <span className="text-sm text-muted-foreground">
           {checked.size} dari {total} izin dicentang
@@ -130,7 +130,7 @@ export function PermissionMatrix({
               <button
                 type="button"
                 onClick={() => setMany(moduleIds, !moduleIds.every((id) => checked.has(id)))}
-                className="ml-auto rounded-md border border-default px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-secondary"
+                className="ml-auto inline-flex min-h-11 md:min-h-8 cursor-pointer items-center justify-center rounded-md border border-default px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-secondary"
               >
                 {moduleIds.every((id) => checked.has(id)) ? "Kosongkan modul" : "Pilih semua modul"}
               </button>
@@ -158,12 +158,12 @@ export function PermissionMatrix({
                         className={hidden ? "hidden" : "border-t border-default/60"}
                       >
                         <td className="px-4 py-2">
-                          <label className="flex cursor-pointer items-center gap-2">
+                          <label className="flex min-h-11 md:min-h-8 cursor-pointer items-center gap-2">
                             <input
                               type="checkbox"
                               checked={rowIds.length > 0 && rowIds.every((id) => checked.has(id))}
                               onChange={(e) => setMany(rowIds, e.target.checked)}
-                              className="size-3.5 accent-primary"
+                              className="size-3.5 cursor-pointer accent-primary"
                               aria-label={`Pilih semua aksi untuk ${row.label}`}
                             />
                             <span className="font-medium text-foreground">{row.label}</span>
@@ -185,16 +185,18 @@ export function PermissionMatrix({
                           const id = cell.permissionId
                           return (
                             <td key={verb} className="px-3 py-2 text-center">
-                              <input
-                                type="checkbox"
-                                name="permissions"
-                                value={id}
-                                checked={checked.has(id)}
-                                onChange={(e) => toggle(id, e.target.checked)}
-                                className="size-4 accent-primary"
-                                aria-label={`${row.label} - ${permissionGroupLabel(verb)}`}
-                                title={permissionLabel(cell.permissionKey)}
-                              />
+                              <label className="inline-flex min-h-11 min-w-11 md:min-h-8 md:min-w-8 cursor-pointer items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  name="permissions"
+                                  value={id}
+                                  checked={checked.has(id)}
+                                  onChange={(e) => toggle(id, e.target.checked)}
+                                  className="size-4 cursor-pointer accent-primary"
+                                  aria-label={`${row.label} - ${permissionGroupLabel(verb)}`}
+                                  title={permissionLabel(cell.permissionKey)}
+                                />
+                              </label>
                             </td>
                           )
                         })}

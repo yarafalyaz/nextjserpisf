@@ -78,7 +78,10 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
     mocks.accountFindManyMock.mockResolvedValue([{ id: 710, _count: { children: 0 } }])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
-    ).rejects.toThrow(/tidak aktif\/terhapus atau tidak ditemukan \(id: 720\)/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/tidak aktif\/terhapus atau tidak ditemukan \(id: 720\)/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
     expect(mocks.accountFindManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -95,7 +98,10 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
     ])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
-    ).rejects.toThrow(/Akun induk tidak bisa diposting \(id: 710\)/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/Akun induk tidak bisa diposting \(id: 710\)/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
@@ -107,7 +113,10 @@ describe("updateSystemSettings happy-path akun lainnya", () => {
     ])
     await expect(
       updateSystemSettings(fd({ commissionExpenseAccountId: "710", commissionPayableAccountId: "720" })),
-    ).rejects.toThrow(/Akun induk tidak bisa diposting \(id: 720\)/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/Akun induk tidak bisa diposting \(id: 720\)/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
@@ -163,14 +172,20 @@ describe("updateSystemSettings validasi Zod field tertulis", () => {
   it("menolak companyLogoDark > 500 char, tanpa update DB", async () => {
     await expect(
       updateSystemSettings(fd({ companyLogoDark: "x".repeat(501) })),
-    ).rejects.toThrow(/Validasi gagal: companyLogoDark/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/Validasi gagal: companyLogoDark/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
   it("menolak depreciationExpenseAccountId non-bilangan, tanpa update DB", async () => {
     await expect(
       updateSystemSettings(fd({ depreciationExpenseAccountId: "abc" })),
-    ).rejects.toThrow(/Validasi gagal: depreciationExpenseAccountId/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/Validasi gagal: depreciationExpenseAccountId/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
@@ -220,9 +235,10 @@ describe("updateSystemSettings gerbang PKP tanpa tanggal (F-2026-10-25-015-V)", 
 
   it("(a) status pkp dari form + settings tersimpan tanpa tanggal -> ditolak verbatim, tanpa update DB", async () => {
     // settings default mock { id: 9 } tanpa companyPkpEffectiveFrom.
-    await expect(updateSystemSettings(fd({ companyPkpStatus: "pkp" }))).rejects.toThrow(
-      PESAN_PKP_TANPA_TANGGAL,
-    )
+    await expect(updateSystemSettings(fd({ companyPkpStatus: "pkp" }))).resolves.toEqual({
+      success: false,
+      error: PESAN_PKP_TANPA_TANGGAL,
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
@@ -251,7 +267,10 @@ describe("updateSystemSettings gerbang PKP tanpa tanggal (F-2026-10-25-015-V)", 
 
   it("(d) tanggal mustahil 2026-02-30 ditolak skema, tanpa update DB", async () => {
     const fdMustahil = fd({ companyPkpStatus: "pkp", companyPkpEffectiveFrom: "2026-02-30" })
-    await expect(updateSystemSettings(fdMustahil)).rejects.toThrow(/tidak valid/i)
+    await expect(updateSystemSettings(fdMustahil)).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/tidak valid/i),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
@@ -334,7 +353,10 @@ describe("updateSystemSettings lima mapping akun fail-closed (t_de3aba0b)", () =
   it("nilai non-bilangan ditolak validasi Zod tanpa menyentuh DB", async () => {
     await expect(
       updateSystemSettings(fd({ supplierClaimReceivableAccountId: "piutang" })),
-    ).rejects.toThrow(/Validasi gagal: supplierClaimReceivableAccountId/)
+    ).resolves.toEqual({
+      success: false,
+      error: expect.stringMatching(/Validasi gagal: supplierClaimReceivableAccountId/),
+    })
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 })

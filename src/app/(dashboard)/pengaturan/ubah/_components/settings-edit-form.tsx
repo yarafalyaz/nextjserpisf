@@ -559,13 +559,17 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       try {
-        const formData = new FormData(e.currentTarget)
         if (logoPreview) formData.set("companyLogo", logoPreview)
         if (logoDarkPreview) formData.set("companyLogoDark", logoDarkPreview)
         if (signaturePreview) formData.set("quotationSignatureImage", signaturePreview)
-        await updateSystemSettings(formData)
+        const res = await updateSystemSettings(formData)
+        if (res && !res.success) {
+          showError(res.error || "Gagal menyimpan pengaturan")
+          return
+        }
         showSuccess("Pengaturan berhasil disimpan")
       } catch (error: unknown) {
         // Next.js redirect throws NEXT_REDIRECT — let it propagate

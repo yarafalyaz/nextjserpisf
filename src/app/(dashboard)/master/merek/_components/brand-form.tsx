@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { X } from "@/components/ui/fontawesome-icons"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
@@ -69,7 +70,7 @@ export function BrandForm({ categories, brand, initialCategories = [] }: BrandFo
   )
 
   const form = (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={handleSubmit} className="sm:bg-surface sm:rounded-xl sm:border sm:border-default sm:shadow-sm sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Merek *</Label>
@@ -103,10 +104,10 @@ export function BrandForm({ categories, brand, initialCategories = [] }: BrandFo
                   <button
                     type="button"
                     onClick={() => removeCategory(cat.id)}
-                    className="hover:text-danger transition-colors"
+                    className="relative cursor-pointer hover:text-danger transition-colors before:absolute before:-inset-3 before:content-['']"
                     aria-label={`Hapus kategori ${cat.name}`}
                   >
-                    <X className="size-3" />
+                    <X className="size-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -123,12 +124,12 @@ export function BrandForm({ categories, brand, initialCategories = [] }: BrandFo
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()}>Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} {...(brand ? {} : { id: "submit-brand" })}>
+      <FormActions>
+        <Button className="w-full md:w-auto min-h-11 md:min-h-9" type="button" onPress={() => router.back()}>Batal</Button>
+        <Button className="w-full md:w-auto min-h-11 md:min-h-9" type="submit" variant="primary" isDisabled={isPending} {...(brand ? {} : { id: "submit-brand" })}>
           {isPending ? "Menyimpan..." : brand ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 

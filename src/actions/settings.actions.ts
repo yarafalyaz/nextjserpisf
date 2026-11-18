@@ -9,13 +9,15 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { updateSystemSettingsSchema, updateStorageSettingsSchema } from "@/lib/validations/settings.schemas"
 
+export type SettingsActionResult = { success: true } | { success: false; error: string }
+
 export async function updateSystemSettings(formData: FormData) {
   try {
   await requirePermission("manage_settings")
 
   const parsed = parseFormData(updateSystemSettingsSchema, formData)
   if (!parsed.success) {
-    throw new Error(parsed.error)
+    return { success: false as const, error: parsed.error }
   }
 
   // Tujuan redirect dihitung SEBELUM tx: helper str() hidup di dalam tx.
@@ -450,8 +452,9 @@ export async function updateSystemSettings(formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
-    console.error("[updateSystemSettings]", getErrorMessage(e) || e)
-    throw e
+    const message = getErrorMessage(e, "Gagal menyimpan pengaturan sistem")
+    console.error("[updateSystemSettings]", message || e)
+    return { success: false as const, error: message }
   }
 }
 
@@ -467,21 +470,18 @@ export async function updateStorageSettings(formData: FormData) {
 
     const parsed = parseFormData(updateStorageSettingsSchema, formData)
     if (!parsed.success) {
-      throw new Error(parsed.error)
+      return { success: false as const, error: parsed.error }
     }
 
-    const get = (key: string) => {
-      const v = formData.get(key)
-      return v !== null ? String(v).trim() : ""
-    }
-
-    const driver = get("storageDriver") || "local"
-    const fallbackLocal = formData.get("storageFallbackLocal") !== null
-    const assetBaseUrl = get("assetBaseUrl").replace(/\/$/, "") || null
-    const r2AccountId = get("r2AccountId") || null
-    const r2AccessKeyId = get("r2AccessKeyId") || null
-    const r2Bucket = get("r2Bucket") || null
-    const newSecret = get("r2SecretAccessKey")
+    const {
+      storageDriver,
+      storageFallbackLocal,
+      assetBaseUrl,
+      r2AccountId,
+      r2AccessKeyId,
+      r2Bucket,
+      r2SecretAccessKey,
+    } = parsed.data
 
     // Singleton sama dengan updateSystemSettings: kunci baris di dalam tx
     // supaya simpan penyimpanan tidak menimpa simpan pengaturan umum yang
@@ -495,14 +495,14 @@ export async function updateStorageSettings(formData: FormData) {
       await tx.systemSetting.update({
         where: { id: settings.id },
         data: {
-          storageDriver: driver,
-          storageFallbackLocal: fallbackLocal,
+          storageDriver,
+          storageFallbackLocal: storageFallbackLocal ?? false,
           assetBaseUrl,
           r2AccountId,
           r2AccessKeyId,
           r2Bucket,
           // Only overwrite the secret when a new value is provided
-          ...(newSecret ? { r2SecretAccessKey: newSecret } : {}),
+          ...(r2SecretAccessKey ? { r2SecretAccessKey } : {}),
         },
       })
       return settings.id
@@ -513,7 +513,8 @@ export async function updateStorageSettings(formData: FormData) {
     redirect("/pengaturan/penyimpanan")
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
-    console.error("[updateStorageSettings]", getErrorMessage(e) || e)
-    throw e
+    const message = getErrorMessage(e, "Gagal menyimpan konfigurasi penyimpanan")
+    console.error("[updateStorageSettings]", message || e)
+    return { success: false as const, error: message }
   }
 }

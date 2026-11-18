@@ -210,6 +210,42 @@ describe("disposeAsset concurrency guard", () => {
     expect(journalCreateMock).not.toHaveBeenCalled()
   })
 
+  it("M2: disposal di hari kalender WIB yang sama tetap sah walau jurnal perolehan membawa jam dinding non-tengah-malam", async () => {
+    const { Prisma } = await import("@prisma/client")
+    const D = (n: number) => new Prisma.Decimal(n)
+    // Jurnal perolehan lama lahir dari new Date() di 2026-01-15 15:30 WIB (08:30Z),
+    // sedangkan disposalDate "2026-01-15" diparsing ke 2026-01-15T00:00:00Z.
+    journalFindManyMock.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        transactionDate: new Date("2026-01-15T08:30:00.000Z"),
+        entries: [{ accountId: 11, debit: D(1000), credit: D(0) }],
+      },
+    ])
+    const result = await disposeAsset(new FormData())
+    expect(result.success).toBe(true)
+    expect(assetUpdateManyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("M2: disposal tetap ditolak jika strictly before hari kalender WIB jurnal terakhir (03:00 WIB = 20:00Z hari UTC sebelumnya)", async () => {
+    const { Prisma } = await import("@prisma/client")
+    const D = (n: number) => new Prisma.Decimal(n)
+    // 2026-01-15T20:00:00Z adalah 2026-01-16 03:00 WIB -> hari kalender WIB = 2026-01-16.
+    // Fixture disposalDate = "2026-01-15" (strictly before 2026-01-16 WIB) wajib ditolak.
+    journalFindManyMock.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        transactionDate: new Date("2026-01-15T20:00:00.000Z"),
+        entries: [{ accountId: 11, debit: D(1000), credit: D(0) }],
+      },
+    ])
+    const result = await disposeAsset(new FormData())
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/tanggal jurnal|sebelum/i)
+    expect(assetUpdateManyMock).not.toHaveBeenCalled()
+    expect(journalCreateMock).not.toHaveBeenCalled()
+  })
+
   it("refuses disposing an asset already marked disposed (outer guard)", async () => {
     assetFindUniqueOrThrowMock.mockResolvedValue({
       id: 7, code: "AST-001", name: "Mesin", status: "disposed",

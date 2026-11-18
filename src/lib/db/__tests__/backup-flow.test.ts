@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { EventEmitter } from "events"
+import { PassThrough, Readable } from "stream"
 
 vi.mock("server-only", () => ({}))
 
 const fsMocks = vi.hoisted(() => ({
   mkdir: vi.fn(),
   readdir: vi.fn(),
+  rename: vi.fn(),
   stat: vi.fn(),
   unlink: vi.fn(),
-  readFile: vi.fn(),
-  writeFile: vi.fn(),
   existsSync: vi.fn(),
   createWriteStream: vi.fn(),
   createReadStream: vi.fn(),
@@ -19,6 +19,7 @@ const storageMocks = vi.hoisted(() => ({
   uploadToCloudIfEnabled: vi.fn(),
   listCloudKeys: vi.fn(),
   downloadFromCloud: vi.fn(),
+  downloadFromCloudStream: vi.fn(),
   deleteFromCloud: vi.fn(),
 }))
 
@@ -27,10 +28,9 @@ const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock("fs/promises", () => ({
   mkdir: (...args: unknown[]) => fsMocks.mkdir(...args),
   readdir: (...args: unknown[]) => fsMocks.readdir(...args),
+  rename: (...args: unknown[]) => fsMocks.rename(...args),
   stat: (...args: unknown[]) => fsMocks.stat(...args),
   unlink: (...args: unknown[]) => fsMocks.unlink(...args),
-  readFile: (...args: unknown[]) => fsMocks.readFile(...args),
-  writeFile: (...args: unknown[]) => fsMocks.writeFile(...args),
 }))
 
 vi.mock("fs", () => ({
@@ -91,16 +91,18 @@ beforeEach(() => {
   process.env.DATABASE_URL = "mysql://tester:***@db.host:3306/testdb"
   fsMocks.mkdir.mockResolvedValue(undefined)
   fsMocks.readdir.mockResolvedValue([])
+  fsMocks.rename.mockResolvedValue(undefined)
   fsMocks.stat.mockResolvedValue({ size: 1024, mtime: new Date("2026-06-12T00:00:00Z") })
   fsMocks.unlink.mockResolvedValue(undefined)
-  fsMocks.readFile.mockResolvedValue(Buffer.from("SQL DATA"))
-  fsMocks.writeFile.mockResolvedValue(undefined)
   fsMocks.existsSync.mockReturnValue(false)
-  fsMocks.createWriteStream.mockReturnValue({ close: vi.fn() } as any)
-  fsMocks.createReadStream.mockReturnValue({ pipe: vi.fn() } as any)
+  fsMocks.createWriteStream.mockImplementation(() => new PassThrough() as any)
+  fsMocks.createReadStream.mockImplementation(
+    () => Object.assign(new EventEmitter(), { pipe: vi.fn(), destroy: vi.fn() }) as any,
+  )
   storageMocks.uploadToCloudIfEnabled.mockResolvedValue(false)
   storageMocks.listCloudKeys.mockResolvedValue([])
   storageMocks.downloadFromCloud.mockResolvedValue(Buffer.from(""))
+  storageMocks.downloadFromCloudStream.mockImplementation(async () => Readable.from(Buffer.from("")))
   storageMocks.deleteFromCloud.mockResolvedValue(undefined)
 })
 
@@ -178,17 +180,23 @@ describe("createBackup", () => {
     expect(a.filename).toMatch(/^backup-manual-.*\.sql$/)
   })
 
-  it("uploads to cloud and reports cloud=true when uploadToCloudIfEnabled returns true", async () => {
+  it("uploads to cloud via stream and reports cloud=true when uploadToCloudIfEnabled returns true", async () => {
     fsMocks.existsSync.mockReturnValue(false)
     spawnMock.mockReturnValue(makeChildProcess(0))
     storageMocks.uploadToCloudIfEnabled.mockResolvedValue(true)
 
     const res = await createBackup()
     expect(res.cloud).toBe(true)
+    expect(fsMocks.createWriteStream).toHaveBeenCalledWith(expect.stringMatching(/\.sql\.tmp$/))
+    expect(fsMocks.rename).toHaveBeenCalledWith(
+      expect.stringMatching(/\.sql\.tmp$/),
+      expect.stringMatching(/\.sql$/),
+    )
     expect(storageMocks.uploadToCloudIfEnabled).toHaveBeenCalledWith(
       expect.stringMatching(/^backups\/backup-/),
-      expect.any(Buffer),
+      expect.objectContaining({ pipe: expect.any(Function) }),
       "application/sql",
+      1024,
     )
   })
 
@@ -246,19 +254,23 @@ describe("restoreBackup", () => {
     )
   })
 
-  it("downloads from cloud when the local file is missing", async () => {
+  it("downloads from cloud atomically via .tmp + rename when the local file is missing", async () => {
     fsMocks.existsSync.mockReturnValue(false)
-    storageMocks.downloadFromCloud.mockResolvedValue(Buffer.from("cloud-sql"))
+    storageMocks.downloadFromCloudStream.mockResolvedValue(Readable.from(Buffer.from("cloud-sql")))
     spawnMock.mockReturnValue(makeChildProcess(0))
 
     await restoreBackup("backup-20260612-101530.sql")
-    expect(storageMocks.downloadFromCloud).toHaveBeenCalledWith("backups/backup-20260612-101530.sql")
-    expect(fsMocks.writeFile).toHaveBeenCalled()
+    expect(storageMocks.downloadFromCloudStream).toHaveBeenCalledWith("backups/backup-20260612-101530.sql")
+    expect(fsMocks.createWriteStream).toHaveBeenCalledWith(expect.stringMatching(/backup-20260612-101530\.sql\.tmp$/))
+    expect(fsMocks.rename).toHaveBeenCalledWith(
+      expect.stringMatching(/backup-20260612-101530\.sql\.tmp$/),
+      expect.stringMatching(/backup-20260612-101530\.sql$/),
+    )
   })
 
   it("throws when neither local nor cloud copy is available", async () => {
     fsMocks.existsSync.mockReturnValue(false)
-    storageMocks.downloadFromCloud.mockRejectedValue(new Error("not found"))
+    storageMocks.downloadFromCloudStream.mockRejectedValue(new Error("not found"))
     await expect(restoreBackup("backup-20260612-101530.sql")).rejects.toThrow(/tidak ditemukan/)
   })
 
@@ -354,17 +366,21 @@ describe("readBackupFile", () => {
     expect(storageMocks.downloadFromCloud).not.toHaveBeenCalled()
   })
 
-  it("downloads from cloud when local file is missing", async () => {
+  it("downloads from cloud atomically via .tmp + rename when local file is missing", async () => {
     fsMocks.existsSync.mockReturnValue(false)
-    storageMocks.downloadFromCloud.mockResolvedValue(Buffer.from("data"))
+    storageMocks.downloadFromCloudStream.mockResolvedValue(Readable.from(Buffer.from("data")))
     const res = await readBackupFile("backup-20260612-101530.sql")
-    expect(fsMocks.writeFile).toHaveBeenCalled()
+    expect(fsMocks.createWriteStream).toHaveBeenCalledWith(expect.stringMatching(/backup-20260612-101530\.sql\.tmp$/))
+    expect(fsMocks.rename).toHaveBeenCalledWith(
+      expect.stringMatching(/backup-20260612-101530\.sql\.tmp$/),
+      expect.stringMatching(/backup-20260612-101530\.sql$/),
+    )
     expect(res.size).toBe(1024)
   })
 
   it("throws when neither local nor cloud has the file", async () => {
     fsMocks.existsSync.mockReturnValue(false)
-    storageMocks.downloadFromCloud.mockRejectedValue(new Error("not found"))
+    storageMocks.downloadFromCloudStream.mockRejectedValue(new Error("not found"))
     await expect(readBackupFile("backup-20260612-101530.sql")).rejects.toThrow(/tidak ditemukan/)
   })
 })

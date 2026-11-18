@@ -431,6 +431,46 @@ describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
       mocks.prismaMock.customerCommissionRate.findUnique.mock.invocationCallOrder[0],
     )
   })
+  it("M3: createCustomerCommissionRate menolak effectiveFrom/effectiveTo tak-kalender (2026-02-30) atau malformed sebelum menyentuh Prisma", async () => {
+    for (const badDate of ["2026-02-30", "bad-date", "", "2026-13-01", "2026-02-29"]) {
+      const res = await actions.createCustomerCommissionRate(fdMap({
+        customerCategoryId: "3", commissionPercent: "5", effectiveFrom: badDate,
+      }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Tanggal mulai berlaku tarif tidak valid/i)
+    }
+    for (const badEndDate of ["2026-02-30", "2026-04-31", "not-a-date"]) {
+      const res = await actions.createCustomerCommissionRate(fdMap({
+        customerCategoryId: "3", commissionPercent: "5", effectiveFrom: "2026-02-28", effectiveTo: badEndDate,
+      }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Tanggal berakhir masa tarif tidak valid/i)
+    }
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerCommissionRate.create).not.toHaveBeenCalled()
+  })
+  it("M3: updateCustomerCommissionRate menolak tanggal rollover/malformed dan meloloskan tanggal sah ke UTC midnight", async () => {
+    const badRes = await actions.updateCustomerCommissionRate(4, fdMap({
+      customerCategoryId: "3", commissionPercent: "6", effectiveFrom: "2026-02-28", effectiveTo: "2026-02-30",
+    }))
+    expect(badRes?.success).toBe(false)
+    expect(badRes?.error).toMatch(/Tanggal berakhir masa tarif tidak valid/i)
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerCommissionRate.update).not.toHaveBeenCalled()
+
+    mocks.prismaMock.customerCommissionRate.findUnique.mockResolvedValue({
+      id: 4, customerCategoryId: 3, commissionPercent: 5,
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"), effectiveTo: null,
+    })
+    mocks.prismaMock.customerCommissionRate.findMany.mockResolvedValue([])
+    const okRes = await actions.updateCustomerCommissionRate(4, fdMap({
+      customerCategoryId: "3", commissionPercent: "6", effectiveFrom: "2026-02-28", effectiveTo: "2026-03-31",
+    }))
+    expect(okRes?.success).toBe(true)
+    const updateArg = mocks.prismaMock.customerCommissionRate.update.mock.calls.at(-1)![0]
+    expect(updateArg.data.effectiveFrom.toISOString()).toBe("2026-02-28T00:00:00.000Z")
+    expect(updateArg.data.effectiveTo.toISOString()).toBe("2026-03-31T00:00:00.000Z")
+  })
   it("createVendor tolak paymentTermId fiktif", async () => {
     const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))
     expect(res?.success).toBe(false)

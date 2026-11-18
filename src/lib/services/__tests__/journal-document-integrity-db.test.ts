@@ -23,26 +23,93 @@ import { prisma } from "@/lib/db/prisma"
 const SKIP = process.env.RUN_DB_INTEGRATION !== "1"
 
 /**
- * Pemetaan referenceType jurnal -> tabel tujuan + soft-delete-ness.
- * Tipe yang muncul di DB dev & seed:
- *   SalesPayment(sales_payments), SalesInvoice, SalesReturn(sales_returns),
- *   VendorBill, VendorPayment, Expense(expenses), BANK_TRANSFER,
- *   Journal(journals — lawan reversal).
- * Point lah tabel Articles; sales_returns/purchase_returns/delivery_orders
- * dll. TANPA deleted_at jadi dianggap hard-delete.
+ * Pemetaan referenceType jurnal -> tabel tujuan, delegasi Prisma, & soft-delete-ness.
+ * Mencakup seluruh pembuat jurnal nyata di codebase + fixture E2E `OpeningBalanceE2E`
+ * (yang merujuk akun `accounts` dan deskripsi `"Saldo awal E2E Kas Kecil"`).
+ * Tipe baru tanpa pemetaan tetap merah supaya pemetaan ikut berjalan.
  */
-const REFERENCE_TABLES: Record<
-  string,
-  { table: "sales_payments" | "sales_invoices" | "sales_returns" | "vendor_bills" | "vendor_payments" | "expenses" | "bank_transfers" | "journals"; softDeleted: boolean }
-> = {
-  SalesPayment: { table: "sales_payments", softDeleted: false },
-  SalesInvoice: { table: "sales_invoices", softDeleted: true },
-  SalesReturn: { table: "sales_returns", softDeleted: false },
-  VendorBill: { table: "vendor_bills", softDeleted: true },
-  VendorPayment: { table: "vendor_payments", softDeleted: true },
-  Expense: { table: "expenses", softDeleted: false },
-  BANK_TRANSFER: { table: "bank_transfers", softDeleted: true },
-  Journal: { table: "journals", softDeleted: false },
+interface ReferenceMapping {
+  table: string
+  model: keyof typeof prisma
+  softDeleted: boolean
+}
+
+const REFERENCE_TABLES: Record<string, ReferenceMapping> = {
+  SalesPayment: { table: "sales_payments", model: "salesPayment", softDeleted: false },
+  SalesInvoice: { table: "sales_invoices", model: "salesInvoice", softDeleted: true },
+  SalesInvoiceCOGS: { table: "sales_invoices", model: "salesInvoice", softDeleted: true },
+  SalesInvoiceReversal: { table: "sales_invoices", model: "salesInvoice", softDeleted: true },
+  SalesReturn: { table: "sales_returns", model: "salesReturn", softDeleted: false },
+  SalesLateFee: { table: "sales_late_fees", model: "salesLateFee", softDeleted: true },
+  SalesLateFeePayment: { table: "sales_late_fee_payments", model: "salesLateFeePayment", softDeleted: false },
+  PurchaseOrder: { table: "purchase_orders", model: "purchaseOrder", softDeleted: true },
+  GoodsReceipt: { table: "goods_receipts", model: "goodsReceipt", softDeleted: false },
+  GoodsReceiptService: { table: "goods_receipts", model: "goodsReceipt", softDeleted: false },
+  PurchaseReturn: { table: "purchase_returns", model: "purchaseReturn", softDeleted: false },
+  PurchaseAdvance: { table: "purchase_advances", model: "purchaseAdvance", softDeleted: true },
+  VendorBill: { table: "vendor_bills", model: "vendorBill", softDeleted: true },
+  VendorPayment: { table: "vendor_payments", model: "vendorPayment", softDeleted: true },
+  StockAdjustment: { table: "stock_adjustments", model: "stockAdjustment", softDeleted: true },
+  InventoryTransfer: { table: "inventory_transfers", model: "inventoryTransfer", softDeleted: false },
+  MaterialIssue: { table: "material_issues", model: "materialIssue", softDeleted: false },
+  ProductionOrder: { table: "production_orders", model: "productionOrder", softDeleted: false },
+  ProductionCost: { table: "production_costs", model: "productionCost", softDeleted: false },
+  ProductionOrderMaterialIssue: { table: "stock_moves", model: "stockMove", softDeleted: false },
+  ProductionOrderAbnormalScrap: { table: "stock_moves", model: "stockMove", softDeleted: false },
+  ProductionOrderCostVariance: { table: "production_orders", model: "productionOrder", softDeleted: false },
+  Expense: { table: "expenses", model: "expense", softDeleted: false },
+  ExpenseReimbursementAccrual: { table: "expenses", model: "expense", softDeleted: false },
+  ExpenseReimbursementPayment: { table: "expenses", model: "expense", softDeleted: false },
+  PettyCash: { table: "petty_cash", model: "pettyCash", softDeleted: true },
+  DownPayment: { table: "down_payments", model: "downPayment", softDeleted: false },
+  BANK_TRANSFER: { table: "bank_transfers", model: "bankTransfer", softDeleted: true },
+  TaxPayment: { table: "tax_payments", model: "taxPayment", softDeleted: true },
+  WithholdingCertificate: { table: "withholding_certificates", model: "withholdingCertificate", softDeleted: false },
+  CustomerCreditRefund: { table: "customer_credits", model: "customerCredit", softDeleted: false },
+  CommissionPayableAccrual: { table: "sales_invoices", model: "salesInvoice", softDeleted: true },
+  CommissionPayableCancellation: { table: "sales_invoices", model: "salesInvoice", softDeleted: true },
+  CommissionPayableReversal: { table: "sales_returns", model: "salesReturn", softDeleted: false },
+  Payroll: { table: "payrolls", model: "payroll", softDeleted: false },
+  EmployeeLoan: { table: "employee_loans", model: "employeeLoan", softDeleted: false },
+  EmployeeLoanRepayment: { table: "employee_loan_repayments", model: "employeeLoanRepayment", softDeleted: false },
+  EmployeeLoanWriteOff: { table: "employee_loan_write_offs", model: "employeeLoanWriteOff", softDeleted: false },
+  DisciplinaryDeduction: { table: "disciplinary_deduction_decisions", model: "disciplinaryDeductionDecision", softDeleted: true },
+  ASSET_ACQUISITION: { table: "assets", model: "asset", softDeleted: false },
+  ASSET_DISPOSAL: { table: "assets", model: "asset", softDeleted: false },
+  ASSET_CHANGE_EVENT: { table: "assets", model: "asset", softDeleted: false },
+  WarrantyClaim: { table: "warranty_claims", model: "warrantyClaim", softDeleted: false },
+  WarrantyClaimCost: { table: "warranty_claims", model: "warrantyClaim", softDeleted: false },
+  WarrantySupplierRecovery: { table: "warranty_claims", model: "warrantyClaim", softDeleted: false },
+  Journal: { table: "journals", model: "journal", softDeleted: true },
+  OpeningBalanceE2E: { table: "accounts", model: "account", softDeleted: true },
+}
+
+function resolveReferenceMapping(type: string): ReferenceMapping | null {
+  if (REFERENCE_TABLES[type]) return REFERENCE_TABLES[type]
+  if (/^ASSET_DEPRECIATION_\d{6}$/.test(type)) {
+    return { table: "assets", model: "asset", softDeleted: false }
+  }
+  if (/^RecurringTransaction_\d{8}$/.test(type)) {
+    return { table: "recurring_transactions", model: "recurringTransaction", softDeleted: true }
+  }
+  if (/^ProductionOrder_\d+$/.test(type) || /^ProductionOrderCostVariance_\d+$/.test(type)) {
+    return { table: "production_orders", model: "productionOrder", softDeleted: false }
+  }
+  return null
+}
+
+function isPeriodReferenceType(type: string): boolean {
+  return type === "YearEndClosing" || type === "PkwtCompensationAccrual"
+}
+
+function isValidPeriodReferenceId(type: string, referenceId: number): boolean {
+  if (type === "YearEndClosing") return Number.isInteger(referenceId) && referenceId >= 1900 && referenceId <= 2200
+  if (type === "PkwtCompensationAccrual") {
+    const year = Math.floor(referenceId / 100)
+    const month = referenceId % 100
+    return Number.isInteger(referenceId) && year >= 1900 && year <= 2200 && month >= 1 && month <= 12
+  }
+  return false
 }
 
 /** Tabel dokumen ber-kolom nomor + apakah tabelnya soft-delete. */
@@ -118,11 +185,18 @@ describe.skipIf(SKIP)("integritas referensi jurnal + rezim nomor dokumen (DB, re
   it("setiap jurnal bertipe terpeta merujuk baris yang ada; REVERSED saja yang boleh ke baris void", async () => {
     const journalsWithRefs = await prisma.journal.findMany({
       where: { referenceType: { not: null }, referenceId: { not: null } },
-      select: { id: true, status: true, referenceType: true, referenceId: true },
+      select: { id: true, status: true, referenceType: true, referenceId: true, description: true },
     })
 
     const presentTypes = [...new Set(journalsWithRefs.map((j) => j.referenceType as string))]
-    const unknownTypes = presentTypes.filter((type) => !REFERENCE_TABLES[type])
+    const mappingByType = new Map<string, ReferenceMapping>()
+    const unknownTypes: string[] = []
+    for (const type of presentTypes) {
+      if (isPeriodReferenceType(type)) continue
+      const mapping = resolveReferenceMapping(type)
+      if (!mapping) unknownTypes.push(type)
+      else mappingByType.set(type, mapping)
+    }
     // Tipe baru di DB tanpa pemetaan merah supaya pemetaan ikut berjalan.
     expect(unknownTypes).toEqual([])
 
@@ -131,26 +205,20 @@ describe.skipIf(SKIP)("integritas referensi jurnal + rezim nomor dokumen (DB, re
     // terisi) ikut terlihat: jurnal REVERSED yang merujuk baris void adalah
     // alur penghapusan yang sah (mis. deleteBankTransfer), barunya yang
     // tidak punya baris sama sekali adalah tautan putus.
-    const livingByType = new Map<string, Set<number>>()
-    const rawByType = new Map<string, Set<number>>()
-    const modelFor: Record<string, () => Promise<Array<{ id: number }>>> = {
-      SalesPayment: () => prisma.salesPayment.findMany({ select: { id: true } }),
-      SalesInvoice: () => prisma.salesInvoice.findMany({ select: { id: true } }),
-      SalesReturn: () => prisma.salesReturn.findMany({ select: { id: true } }),
-      VendorBill: () => prisma.vendorBill.findMany({ select: { id: true } }),
-      VendorPayment: () => prisma.vendorPayment.findMany({ select: { id: true } }),
-      Expense: () => prisma.expense.findMany({ select: { id: true } }),
-      BANK_TRANSFER: () => prisma.bankTransfer.findMany({ select: { id: true } }),
-      Journal: () => prisma.journal.findMany({ select: { id: true } }),
-    }
-    for (const [type, mapping] of Object.entries(REFERENCE_TABLES)) {
-      const livingRows = await modelFor[type]()
-      livingByType.set(type, new Set(livingRows.map((row) => row.id)))
+    const livingByTable = new Map<string, Set<number>>()
+    const rawByTable = new Map<string, Set<number>>()
+    for (const mapping of mappingByType.values()) {
+      if (livingByTable.has(mapping.table)) continue
+      const delegate = prisma[mapping.model] as unknown as {
+        findMany: (args: { select: { id: true } }) => Promise<Array<{ id: number }>>
+      }
+      const livingRows = await delegate.findMany({ select: { id: true } })
+      livingByTable.set(mapping.table, new Set(livingRows.map((row) => row.id)))
       if (mapping.softDeleted) {
         const rawRows = await prisma.$queryRaw<Array<{ id: number }>>(
           Prisma.sql`SELECT id FROM ${Prisma.raw(`\`${mapping.table}\``)}`,
         )
-        rawByType.set(type, new Set(rawRows.map((row) => row.id)))
+        rawByTable.set(mapping.table, new Set(rawRows.map((row) => row.id)))
       }
     }
 
@@ -158,10 +226,21 @@ describe.skipIf(SKIP)("integritas referensi jurnal + rezim nomor dokumen (DB, re
     for (const journal of journalsWithRefs) {
       const type = journal.referenceType as string
       const referenceId = journal.referenceId as number
-      const living = livingByType.get(type)
+      if (isPeriodReferenceType(type)) {
+        if (!isValidPeriodReferenceId(type, referenceId)) {
+          dangling.push(`${type}:${referenceId} (jurnal ${journal.id} ${journal.status})`)
+        }
+        continue
+      }
+      if (type === "OpeningBalanceE2E" && journal.description !== "Saldo awal E2E Kas Kecil") {
+        dangling.push(`${type}:${referenceId} (jurnal ${journal.id} bukan fixture E2E resmi)`)
+        continue
+      }
+      const mapping = mappingByType.get(type)!
+      const living = livingByTable.get(mapping.table)
       if (!living?.has(referenceId)) {
-        const raw = rawByType.get(type)
-        const voidedRowPresent = REFERENCE_TABLES[type].softDeleted && raw?.has(referenceId)
+        const raw = rawByTable.get(mapping.table)
+        const voidedRowPresent = mapping.softDeleted && raw?.has(referenceId)
         if (voidedRowPresent && journal.status === "REVERSED") continue
         dangling.push(`${type}:${referenceId} (jurnal ${journal.id} ${journal.status})`)
       }

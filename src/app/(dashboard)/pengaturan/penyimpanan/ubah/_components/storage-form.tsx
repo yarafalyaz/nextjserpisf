@@ -5,6 +5,7 @@ import { useState, useTransition } from "react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/shadcn/button"
+import { FormActions } from "@/components/ui/form-section"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/shadcn/card"
 import { Switch } from "@/components/ui/shadcn/switch"
 import { Cloud, HardDrive, Loader2 } from "@/components/ui/fontawesome-icons"
@@ -37,9 +38,14 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       try {
-        await updateStorageSettings(new FormData(e.currentTarget))
+        const res = await updateStorageSettings(formData)
+        if (res && !res.success) {
+          showError(res.error || "Gagal menyimpan konfigurasi")
+          return
+        }
       } catch (error) {
         if (isRedirectError(error)) throw error
         showError(error instanceof Error ? error.message : "Gagal menyimpan konfigurasi")
@@ -75,7 +81,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
                   role="radio"
                   aria-checked={active}
                   onClick={() => setSelectedDriver(opt.value)}
-                  className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-colors ${
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 text-left transition-colors ${
                     active ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:bg-accent"
                   }`}
                 >
@@ -179,15 +185,24 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
         </Card>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isPending}>
+      <FormActions>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 md:min-h-9 w-full md:w-auto"
+          onClick={() => router.push("/pengaturan/penyimpanan")}
+        >
+          Batal
+        </Button>
+        <Button
+          type="submit"
+          disabled={isPending}
+          className="min-h-11 md:min-h-9 w-full md:w-auto"
+        >
           {isPending ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
           {isPending ? "Menyimpan..." : "Simpan Konfigurasi"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => router.push("/pengaturan/penyimpanan")}>
-          Batal
-        </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

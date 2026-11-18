@@ -1350,6 +1350,25 @@ describe("createAsset / updateAsset", () => {
     expect(arg.data.purchaseDate.toISOString()).toBe("2026-06-12T00:00:00.000Z")
   })
 
+  it("M2: createAsset tanpa purchaseDate mencatat ASSET_ACQUISITION di tengah malam UTC hari kalender WIB", async () => {
+    vi.useFakeTimers()
+    try {
+      // 03:00 WIB pada 2026-11-18 = 2026-11-17T20:00:00Z
+      vi.setSystemTime(new Date("2026-11-17T20:00:00.000Z"))
+      const res = await createAsset(fd({
+        name: "Mesin Bubut",
+        code: "AST-M2",
+        purchasePrice: "5000000",
+      }))
+      expect(res.success).toBe(true)
+      const jCall = prismaMock.journal.create.mock.calls.at(-1)![0]
+      expect(jCall.data.transactionDate.toISOString()).toBe("2026-11-18T00:00:00.000Z")
+      expect(jCall.data.journalNumber).toMatch(/^JRN-202611-/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // F62-5 (vonis F-2026-10-22-062-V Putusan 3): perolehan berharga tanpa akun
   // Aset Tetap/Kas-Bank DITOLAK berisik, nol baris Asset lahir. Dulu aset
   // lahir tanpa jurnal ("skipped silently") — perilaku itu dilarang.

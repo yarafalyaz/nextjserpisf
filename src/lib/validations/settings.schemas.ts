@@ -265,12 +265,70 @@ export const updateSystemSettingsSchema = z.object({
 
 // ==================== STORAGE SETTINGS ====================
 
+export const R2_ACCOUNT_ID_REGEX = /^[a-z0-9]{16,64}$/i
+
+export function isValidHttpsBaseUrl(value: string): boolean {
+  if (!value.toLowerCase().startsWith("https://")) return false
+  if (!URL.canParse(value)) return false
+  const u = new URL(value)
+  return u.protocol === "https:" && Boolean(u.hostname) && !u.username && !u.password
+}
+
+const optionalTrimmedNullString = (max = 255) =>
+  z.preprocess(
+    (v) => {
+      if (v === undefined || v === null) return null
+      if (typeof v !== "string") return v
+      const trimmed = v.trim()
+      return trimmed === "" ? null : trimmed
+    },
+    z.string().max(max).nullable(),
+  )
+
+const optionalTrimmedSecret = (max = 500) =>
+  z.preprocess(
+    (v) => {
+      if (v === undefined || v === null) return undefined
+      if (typeof v !== "string") return v
+      const trimmed = v.trim()
+      return trimmed === "" ? undefined : trimmed
+    },
+    z.string().max(max).optional(),
+  )
+
+const assetBaseUrlSchema = z.preprocess(
+  (v) => {
+    if (v === undefined || v === null) return null
+    if (typeof v !== "string") return v
+    const trimmed = v.trim().replace(/\/+$/, "")
+    return trimmed === "" ? null : trimmed
+  },
+  z
+    .string()
+    .max(500)
+    .refine(isValidHttpsBaseUrl, "Asset Base URL harus berupa URL https:// yang valid")
+    .nullable(),
+)
+
+const r2AccountIdSchema = z.preprocess(
+  (v) => {
+    if (v === undefined || v === null) return null
+    if (typeof v !== "string") return v
+    const trimmed = v.trim()
+    return trimmed === "" ? null : trimmed
+  },
+  z
+    .string()
+    .regex(R2_ACCOUNT_ID_REGEX, "ID Akun Cloudflare R2 harus berupa 16-64 karakter alfanumerik")
+    .nullable(),
+)
+
 export const updateStorageSettingsSchema = z.object({
-  storageDriver: z.string().max(50).optional().default("local"),
+  storageDriver: z.enum(["local", "r2"]).optional().default("local"),
   storageFallbackLocal: optionalBool(),
-  assetBaseUrl: optionalNullString(500),
-  r2AccountId: optionalNullString(),
-  r2AccessKeyId: optionalNullString(),
-  r2Bucket: optionalNullString(),
-  r2SecretAccessKey: optionalString(500),
+  assetBaseUrl: assetBaseUrlSchema,
+  r2AccountId: r2AccountIdSchema,
+  r2AccessKeyId: optionalTrimmedNullString(),
+  r2Bucket: optionalTrimmedNullString(),
+  r2SecretAccessKey: optionalTrimmedSecret(500),
 })

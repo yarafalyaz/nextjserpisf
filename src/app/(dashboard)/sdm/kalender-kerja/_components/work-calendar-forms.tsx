@@ -13,6 +13,7 @@ import {
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -271,13 +272,13 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
           <Label htmlFor="scheduleEnd">Jam selesai *</Label>
           <AppTimePicker id="scheduleEnd" name="endTime" defaultValue={schedule?.endTime ?? "17:00"} />
         </div>
-        <label className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
+        <label className="inline-flex min-h-11 min-w-11 md:min-h-9 md:min-w-0 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             name="isActive"
             value="on"
             defaultChecked={schedule ? schedule.isActive : true}
-            className="h-4 w-4 rounded border-default"
+            className="h-4 w-4 cursor-pointer rounded border-default"
           />
           Aktif
         </label>
@@ -285,15 +286,18 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-sm font-medium text-foreground">Hari kerja *</legend>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           {DAY_NAMES.map((label, index) => (
-            <label key={label} className="inline-flex items-center gap-1.5 text-sm text-foreground">
+            <label
+              key={label}
+              className="inline-flex min-h-11 min-w-11 md:min-h-9 md:min-w-0 cursor-pointer items-center gap-1.5 text-sm text-foreground"
+            >
               <input
                 type="checkbox"
                 name="workDays"
                 value={String(index)}
                 defaultChecked={selectedDays.has(String(index))}
-                className="h-4 w-4 rounded border-default"
+                className="h-4 w-4 cursor-pointer rounded border-default"
               />
               {label}
             </label>
@@ -304,16 +308,25 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
         </p>
       </fieldset>
 
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" isDisabled={isPending}>
-          {isPending ? "Menyimpan..." : schedule ? "Perbarui" : "Tambah"}
-        </Button>
+      <FormActions>
         {schedule && (
-          <Button type="button" onPress={() => router.push("/sdm/kalender-kerja")}>
+          <Button
+            type="button"
+            className="w-full md:w-auto min-h-11 md:min-h-9 cursor-pointer"
+            onPress={() => router.push("/sdm/kalender-kerja")}
+          >
             Batal
           </Button>
         )}
-      </div>
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full md:w-auto min-h-11 md:min-h-9 cursor-pointer"
+          isDisabled={isPending}
+        >
+          {isPending ? "Menyimpan..." : schedule ? "Perbarui" : "Tambah"}
+        </Button>
+      </FormActions>
     </form>
   )
 }

@@ -57,6 +57,9 @@ export interface ReportPeriodFilterProps {
   filters?: Record<string, string | undefined>
 }
 
+const PRESET_BUTTON_CLASS =
+  "inline-flex min-h-11 md:min-h-8 cursor-pointer items-center justify-center px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+
 /**
  * Satu-satunya filter laporan di aplikasi ini.
  *
@@ -144,7 +147,7 @@ export function ReportPeriodFilter({
                   const now = new Date()
                   setPreset(new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
                 }}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Bulan Ini
               </button>
@@ -154,7 +157,7 @@ export function ReportPeriodFilter({
                   const now = new Date()
                   setPreset(new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0))
                 }}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Bulan Lalu
               </button>
@@ -165,7 +168,7 @@ export function ReportPeriodFilter({
                   const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
                   setPreset(new Date(now.getFullYear(), quarterStartMonth, 1), new Date(now.getFullYear(), quarterStartMonth + 3, 0))
                 }}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Kuartal Ini
               </button>
@@ -175,7 +178,7 @@ export function ReportPeriodFilter({
                   const now = new Date()
                   setPreset(new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), now.getMonth() + 1, 0))
                 }}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Tahun Ini (YTD)
               </button>
@@ -185,7 +188,7 @@ export function ReportPeriodFilter({
               <button
                 type="button"
                 onClick={() => setAsOfPreset(new Date())}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Hari Ini
               </button>
@@ -195,7 +198,7 @@ export function ReportPeriodFilter({
                   const now = new Date()
                   setAsOfPreset(new Date(now.getFullYear(), now.getMonth(), 0))
                 }}
-                className="px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary hover:text-foreground transition-colors font-medium"
+                className={PRESET_BUTTON_CLASS}
               >
                 Akhir Bulan Lalu
               </button>
@@ -265,7 +268,7 @@ export function ReportPeriodFilter({
       {toggle ? (
         <label
           htmlFor={`opsi-${toggle.param}`}
-          className="flex cursor-pointer items-center gap-2 pb-2.5 text-sm text-foreground"
+          className="flex min-h-11 md:min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
         >
           <Checkbox
             id={`opsi-${toggle.param}`}

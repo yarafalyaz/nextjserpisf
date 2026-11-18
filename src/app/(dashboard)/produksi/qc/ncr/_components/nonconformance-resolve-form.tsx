@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/shadcn/select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 const STATUS_OPTIONS = [
   { value: "rework", label: "Dikerjakan ulang" },
@@ -101,11 +102,11 @@ export function NonconformanceResolveForm({
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-resolve-ncr">
+      <FormActions>
+        <Button className="w-full md:w-auto min-h-11 md:min-h-9" type="submit" variant="primary" isDisabled={isPending} id="submit-resolve-ncr">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

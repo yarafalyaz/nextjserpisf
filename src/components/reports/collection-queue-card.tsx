@@ -51,6 +51,14 @@ const REMINDER_TONES: Record<
   eskalasi: "danger",
 }
 
+function reminderChipClass(active: boolean): string {
+  return `inline-flex min-h-11 md:min-h-8 cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+    active
+      ? "border-primary bg-primary/10 text-primary font-semibold"
+      : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+  }`
+}
+
 /**
  * Antrean Penagihan Piutang (F-2026-10-22-089-S §6).
  *
@@ -125,11 +133,7 @@ export function CollectionQueueCard({
             >
               <button
                 type="button"
-                className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                  levelFilter === "semua"
-                    ? "border-primary bg-primary/10 text-primary font-semibold"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                className={reminderChipClass(levelFilter === "semua")}
                 aria-pressed={levelFilter === "semua"}
                 onClick={() => setLevelFilter("semua")}
               >
@@ -142,11 +146,7 @@ export function CollectionQueueCard({
                   <button
                     key={level}
                     type="button"
-                    className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      isActive
-                        ? "border-primary bg-primary/10 text-primary font-semibold"
-                        : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
+                    className={reminderChipClass(isActive)}
                     aria-pressed={isActive}
                     onClick={() => setLevelFilter(level)}
                   >

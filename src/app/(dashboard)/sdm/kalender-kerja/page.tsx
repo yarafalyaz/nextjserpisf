@@ -140,7 +140,7 @@ export default async function WorkCalendarPage({
                         <CanCreate permission="edit_holidays">
                           <Link
                             href={`/sdm/kalender-kerja/libur/${holiday.id}/ubah`}
-                            className="text-sm text-primary hover:underline"
+                            className="inline-flex min-h-11 min-w-11 md:min-h-8 md:min-w-0 items-center justify-center px-2 text-sm text-primary hover:underline cursor-pointer"
                           >
                             Ubah
                           </Link>
@@ -201,7 +201,7 @@ export default async function WorkCalendarPage({
                         <CanCreate permission="edit_holidays">
                           <Link
                             href={`/sdm/kalender-kerja/libur-departemen/${holiday.id}/ubah`}
-                            className="text-sm text-primary hover:underline"
+                            className="inline-flex min-h-11 min-w-11 md:min-h-8 md:min-w-0 items-center justify-center px-2 text-sm text-primary hover:underline cursor-pointer"
                           >
                             Ubah
                           </Link>
@@ -271,7 +271,7 @@ export default async function WorkCalendarPage({
                         <CanCreate permission="edit_work_schedules">
                           <Link
                             href={`/sdm/kalender-kerja/jadwal/${schedule.id}/ubah`}
-                            className="text-sm text-primary hover:underline"
+                            className="inline-flex min-h-11 min-w-11 md:min-h-8 md:min-w-0 items-center justify-center px-2 text-sm text-primary hover:underline cursor-pointer"
                           >
                             Ubah
                           </Link>

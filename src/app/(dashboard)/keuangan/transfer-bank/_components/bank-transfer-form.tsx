@@ -7,6 +7,7 @@ import { ArrowRight } from "@/components/ui/fontawesome-icons"
 import { createBankTransfer } from "@/actions/bank-transfer.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -158,20 +159,18 @@ export function BankTransferForm({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-5 border-t border-default">
-        <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
+      <FormActions>
+        <p className="order-last text-xs text-muted-foreground inline-flex flex-wrap items-center gap-1.5 md:order-none md:mr-auto md:self-center">
           Jurnal: Dr {toAccountId ? "rekening tujuan" : "…"} <ArrowRight size={12} aria-hidden="true" /> Cr
           {" "}rekening asal{feeNumber > 0 ? " + biaya admin" : ""}
         </p>
-        <div className="flex gap-3">
-          <Button type="button" onPress={() => router.back()} isDisabled={isPending}>
-            Batal
-          </Button>
-          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-bank-transfer">
-            {isPending ? "Menyimpan..." : "Simpan & Posting"}
-          </Button>
-        </div>
-      </div>
+        <Button type="button" className="w-full md:w-auto min-h-11 md:min-h-9" onPress={() => router.back()} isDisabled={isPending}>
+          Batal
+        </Button>
+        <Button type="submit" variant="primary" className="w-full md:w-auto min-h-11 md:min-h-9" isDisabled={isPending} id="submit-bank-transfer">
+          {isPending ? "Menyimpan..." : "Simpan & Posting"}
+        </Button>
+      </FormActions>
     </form>
   )
 }

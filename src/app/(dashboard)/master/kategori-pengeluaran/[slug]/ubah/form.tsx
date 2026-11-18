@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Switch } from "@/components/ui/shadcn/switch"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface Props {
@@ -73,17 +74,32 @@ export function EditForm({ category }: Props) {
           </div>
         </div>
       </div>
-      <div className="flex justify-between mt-6 pt-5 border-t border-default">
-        <Button type="button" variant="danger" onPress={handleDelete} isDisabled={isPending}>
+      <FormActions>
+        <Button
+          type="button"
+          variant="danger"
+          className="w-full md:w-auto md:mr-auto min-h-11 md:min-h-9"
+          onPress={handleDelete}
+          isDisabled={isPending}
+        >
           Hapus
         </Button>
-        <div className="flex gap-3">
-          <Button type="button" onPress={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : "Perbarui"}
-          </Button>
-        </div>
-      </div>
+        <Button
+          type="button"
+          className="w-full md:w-auto min-h-11 md:min-h-9"
+          onPress={() => router.back()}
+        >
+          Batal
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full md:w-auto min-h-11 md:min-h-9"
+          isDisabled={isPending}
+        >
+          {isPending ? "Menyimpan..." : "Perbarui"}
+        </Button>
+      </FormActions>
 
       <ConfirmDialog
         isOpen={confirmDelete}

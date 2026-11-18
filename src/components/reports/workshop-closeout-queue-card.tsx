@@ -55,6 +55,14 @@ function jobDetailHref(job: CloseoutQueueJob): string {
     : entityHref("/produksi/production-orders", job)
 }
 
+function ageChipClass(active: boolean): string {
+  return `inline-flex min-h-11 md:min-h-8 cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+    active
+      ? "border-primary bg-primary/10 text-primary font-semibold"
+      : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+  }`
+}
+
 export function WorkshopCloseoutQueueCard({
   queue,
   canCloseWorkOrder,
@@ -121,11 +129,7 @@ export function WorkshopCloseoutQueueCard({
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter ember umur">
               <button
                 type="button"
-                className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                  bucketFilter === "all"
-                    ? "border-primary bg-primary/10 text-primary font-semibold"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                className={ageChipClass(bucketFilter === "all")}
                 aria-pressed={bucketFilter === "all"}
                 onClick={() => setBucketFilter("all")}
               >
@@ -146,11 +150,7 @@ export function WorkshopCloseoutQueueCard({
                   <button
                     key={bucket.id}
                     type="button"
-                    className={`filter-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      isActive
-                        ? "border-primary bg-primary/10 text-primary font-semibold"
-                        : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
+                    className={ageChipClass(isActive)}
                     aria-pressed={isActive}
                     onClick={() => setBucketFilter(bucket.id)}
                   >

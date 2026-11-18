@@ -37,6 +37,8 @@ services:
       - TRUSTED_PROXY=1
     volumes:
       - ./public/uploads:/app/public/uploads
+      - ./private/uploads:/app/private/uploads
+      - ./backups:/app/backups
     depends_on:
       db:
         condition: service_healthy

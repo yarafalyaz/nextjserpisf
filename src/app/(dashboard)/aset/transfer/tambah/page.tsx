@@ -8,7 +8,7 @@ import { TRANSFERABLE_ASSET_STATUSES } from "@/lib/constants/status"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Transfer Stok" }
+export const metadata: Metadata = { title: "Tambah Transfer Aset" }
 
 export default async function CreateAssetTransferPage() {
   await requirePermission("create_asset_transfers")

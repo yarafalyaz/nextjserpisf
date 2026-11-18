@@ -208,22 +208,43 @@ describe("updateStorageSettingsSchema", () => {
     expect(result.storageDriver).toBe("r2")
   })
 
-  it("rejects storageDriver over 50 chars", () => {
-    const result = updateStorageSettingsSchema.safeParse({
-      storageDriver: "d".repeat(51),
-    })
-    expect(result.success).toBe(false)
+  it("rejects invalid storageDriver values outside local/r2", () => {
+    expect(updateStorageSettingsSchema.safeParse({ storageDriver: "d".repeat(51) }).success).toBe(false)
+    expect(updateStorageSettingsSchema.safeParse({ storageDriver: "s3" }).success).toBe(false)
   })
 
-  it("accepts r2 credential placeholders", () => {
+  it("accepts valid 32-hex r2 account id and credentials", () => {
     const result = updateStorageSettingsSchema.safeParse({
       storageDriver: "r2",
-      r2AccountId: "acct-placeholder",
+      r2AccountId: "0123456789abcdef0123456789abcdef",
       r2AccessKeyId: "key-placeholder",
       r2Bucket: "assets",
-      "r2SecretAccessKey": "placeholder-value",
+      r2SecretAccessKey: "placeholder-value",
     })
     expect(result.success).toBe(true)
+  })
+
+  it("rejects SSRF/malformed r2AccountId values", () => {
+    for (const bad of ["evil.com/x#", "acct-123", "acct-placeholder", "short123", "x".repeat(65)]) {
+      expect(
+        updateStorageSettingsSchema.safeParse({ storageDriver: "r2", r2AccountId: bad }).success,
+        bad,
+      ).toBe(false)
+    }
+  })
+
+  it("validates assetBaseUrl as https://-only while allowing blank or null", () => {
+    expect(updateStorageSettingsSchema.parse({ assetBaseUrl: "" }).assetBaseUrl).toBeNull()
+    expect(updateStorageSettingsSchema.parse({ assetBaseUrl: null }).assetBaseUrl).toBeNull()
+    expect(
+      updateStorageSettingsSchema.parse({ assetBaseUrl: "https://cdn.example.com/" }).assetBaseUrl,
+    ).toBe("https://cdn.example.com")
+    for (const bad of ["javascript:alert(1)", "data:text/html,<script>", "http://cdn.example.com", "//evil.com"]) {
+      expect(
+        updateStorageSettingsSchema.safeParse({ assetBaseUrl: bad }).success,
+        bad,
+      ).toBe(false)
+    }
   })
 
   it("allows storageFallbackLocal toggle", () => {

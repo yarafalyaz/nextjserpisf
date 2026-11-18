@@ -76,7 +76,7 @@ const columns = [
     cell: (info) => (
       <Link
         href={entityHref("/pengaturan/pengguna", info.row.original)}
-        className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer shadow-2xs"
+        className="inline-flex min-h-11 min-w-11 md:min-h-8 md:min-w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer shadow-2xs"
         title="Ubah Pengguna"
         aria-label={`Ubah pengguna ${info.row.original.name}`}
       >

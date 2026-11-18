@@ -10,7 +10,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { TRANSFERABLE_ASSET_STATUSES } from "@/lib/constants/status"
-export const metadata: Metadata = { title: "Ubah Transfer Stok" }
+export const metadata: Metadata = { title: "Ubah Transfer Aset" }
 
 export default async function EditPage({
   params,

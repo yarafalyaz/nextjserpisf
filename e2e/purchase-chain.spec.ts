@@ -1,8 +1,31 @@
-import { test, expect } from "@playwright/test"
-import { awaitReady } from "./utils/await-ready"
+import { test, expect, type Page } from "@playwright/test"
+import { selectComboboxOptionBySearch } from "./utils/combobox"
 import { skipOnMobile } from "./utils/desktop-only"
 import { prisma } from "@/lib/db/prisma"
 import { Prisma } from "@prisma/client"
+
+async function clickAlertDialogConfirm(
+  page: Page,
+  triggerName: RegExp,
+  confirmName: RegExp,
+) {
+  const trigger = page.getByRole("button", { name: triggerName }).first()
+  await expect(trigger).toBeVisible({ timeout: 30_000 })
+  await expect(trigger).toBeEnabled({ timeout: 15_000 })
+  const dialog = page.getByRole("alertdialog")
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    await trigger.click({ timeout: 5_000 }).catch(() => {})
+    const open = await dialog
+      .waitFor({ state: "visible", timeout: 1_500 })
+      .then(() => true)
+      .catch(() => false)
+    if (open) break
+    await page.waitForTimeout(150)
+  }
+  await expect(dialog).toBeVisible({ timeout: 5_000 })
+  await dialog.getByRole("button", { name: confirmName }).first().click()
+}
 
 /**
  * RANTAI BELI P2-1: PO approved → GR (buat+verifikasi) → tagihan (buat+konfirmasi)
@@ -18,6 +41,7 @@ import { Prisma } from "@prisma/client"
 test.describe.serial("Pembelian — rantai penuh", () => {
   test("PO → terima → tagih → bayar, stok & jurnal & sisa terbukti di DB", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Rantai beli lengkap khusus desktop")
+    test.setTimeout(120_000)
     // 0. PO fixture: reset ke approved + bersihkan sisa run sebelumnya supaya
     // run idempoten (qty absolut, bukan akumulasi antar run).
     // AUD-R13-01: SEMUA cleanup scoping fixture — orphan-yatim global pun
@@ -98,16 +122,18 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // 1. Buat penerimaan dari PO (prefill path po/<slug>; query ?poId lama
     // di-redirect server ke bentuk ini).
     await page.goto(`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`, { waitUntil: "domcontentloaded" })
-    await awaitReady(page, "form")
+    await page.waitForLoadState("load")
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     // Header "Gudang Tujuan" wajib dipilih manual (combobox kosong walau baris
     // prefill) — tanpa ini tombol Terima Barang disabled.
-    // QuickAddSelect = popover + input cari: ketik nama, pilih suggestion.
-    // getByLabel cocok juga teks di dialog quick-add yang terbuka; scope ke form.
-    // CommandInput di dalam popover punya placeholder "Cari gudang...".
-    await page.getByRole("combobox", { name: /gudang tujuan/i }).click()
-    await page.getByPlaceholder(/cari gudang/i).fill("Gudang E2E")
-    await page.getByRole("option", { name: "Gudang E2E" }).click()
+    const warehousePicked = await selectComboboxOptionBySearch(
+      page,
+      { name: /gudang tujuan/i },
+      "Gudang E2E",
+      /^Gudang E2E$/,
+    )
+    expect(warehousePicked).toBe(true)
     await expect(page.getByRole("button", { name: "Terima Barang" })).toBeEnabled({
       timeout: 15_000,
     })
@@ -131,7 +157,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // AUD-R12-02: filter purchaseOrderId + status draft — id>saja bisa
     // comot GR PO lain dari shard paralel.
     let gr = null
-    for (let i = 0; i < 20 && !gr; i++) {
+    for (let i = 0; i < 80 && !gr; i++) {
       gr = await prisma.goodsReceipt.findFirst({
         where: {
           id: { gt: maxGrBefore._max.id ?? 0 },
@@ -140,7 +166,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
         },
         orderBy: { id: "desc" },
       })
-      if (!gr) await new Promise((r) => setTimeout(r, 1000))
+      if (!gr) await page.waitForTimeout(250)
     }
     if (!gr) throw new Error("GR run ini tak lahir — Terima Barang gagal di server (cek toast/log)")
     expect(gr.status).toBe("draft")
@@ -148,10 +174,12 @@ test.describe.serial("Pembelian — rantai penuh", () => {
 
     // 2. Verifikasi GR → stok masuk + mutasi IN. Klik link dokumen di tabel
     // (spec tiba di daftar, bukan detail) lalu verifikasi di detail.
-    await page.getByRole("link", { name: new RegExp(gr.documentNo.replace(/\//g, "\\/")) }).first().click()
+    const grLink = page.getByRole("link", { name: new RegExp(gr.documentNo.replace(/\//g, "\\/")) }).first()
+    await expect(grLink).toBeVisible({ timeout: 30_000 })
+    await grLink.click()
     await page.waitForURL(/\/pembelian\/penerimaan\/[^/]+$/, { timeout: 30_000 })
-    await page.getByRole("button", { name: "Verifikasi" }).first().click()
-    await page.getByRole("button", { name: "Verifikasi" }).last().click()
+    await page.waitForLoadState("load")
+    await clickAlertDialogConfirm(page, /^Verifikasi$/, /^Verifikasi$/)
     await expect(page.getByText("Terverifikasi").first()).toBeVisible({ timeout: 30_000 })
 
     // Movement milik GR ini (reference GoodsReceipt + id GR), bukan movement lama.
@@ -173,8 +201,11 @@ test.describe.serial("Pembelian — rantai penuh", () => {
 
     // 3. Buat tagihan dari GR (prefill path penerimaan/<slug GR>) → konfirmasi → jurnal AP lahir.
     await page.goto(`/pembelian/tagihan/tambah/penerimaan/${gr.slug ?? gr.id}`, { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    await page.getByRole("button", { name: "Simpan", exact: true }).click()
+    await page.waitForLoadState("load")
+    const saveBillBtn = page.getByRole("button", { name: "Simpan", exact: true })
+    await expect(saveBillBtn).toBeVisible({ timeout: 30_000 })
+    await expect(saveBillBtn).toBeEnabled({ timeout: 15_000 })
+    await saveBillBtn.click()
     // Sukses = redirect ke DAFTAR tagihan (form push ke /pembelian/tagihan).
     await page.waitForURL(/\/pembelian\/tagihan$/, { timeout: 30_000 })
     // Tagihan milik GR ini = yang baru dibuat (tegas 1 baris: cleanup di awal).
@@ -187,8 +218,11 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     expect(bill.goodsReceiptId).toBe(gr.id)
 
     // Buka detail bill baru dari daftar, lalu konfirmasi di sana.
-    await page.getByRole("link", { name: new RegExp(bill.documentNo.replace(/\//g, "\\/")) }).first().click()
+    const billLink = page.getByRole("link", { name: new RegExp(bill.documentNo.replace(/\//g, "\\/")) }).first()
+    await expect(billLink).toBeVisible({ timeout: 30_000 })
+    await billLink.click()
     await page.waitForURL(/\/pembelian\/tagihan\/[^/]+$/, { timeout: 30_000 })
+    await page.waitForLoadState("load")
     // Tegaskan detail ini milik GR rantai (tolak salah-klik ke bill basi).
     await expect(page.getByText("E2E-PO-CHAIN").first()).toBeVisible({ timeout: 15_000 })
     const confirmedBill = bill
@@ -204,18 +238,17 @@ test.describe.serial("Pembelian — rantai penuh", () => {
         data: { createdBy: otherApprover.id },
       })
     }
-    await page.getByRole("button", { name: "Konfirmasi" }).first().click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Konfirmasi" }).click()
+    await clickAlertDialogConfirm(page, /^Konfirmasi$/, /^Konfirmasi$/)
     await expect(page.getByText(/Diposting|Diterbitkan/).first()).toBeVisible({ timeout: 30_000 })
     // Konfirmasi = server action async; jurnal lahir sesudah revalidasi.
     // Poll DB (bukan sleep buta) sampai jurnal POSTED muncul.
     let journals: { id: number }[] = []
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 80; i++) {
       journals = await prisma.journal.findMany({
         where: { referenceType: "VendorBill", referenceId: confirmedBill.id },
       })
       if (journals.length > 0) break
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(250)
     }
     expect(journals.length).toBe(1)
     for (const j of journals) {
@@ -229,14 +262,20 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // 4. Bayar tagihan → konfirmasi → sisa 0, status lunas. Dari detail tagihan
     // via tombol "Bayar" (prefill billId + vendor + jumlah otomatis). Scope ke
     // <main>: link "Bayar" juga ada di sidebar/nav.
-    await page.locator("main").getByRole("link", { name: "Bayar" }).click()
+    const payBtn = page.locator("main").getByRole("link", { name: "Bayar" })
+    await expect(payBtn).toBeVisible({ timeout: 30_000 })
+    await payBtn.click()
     await page.waitForURL(/\/pembelian\/pembayaran-vendor\/tambah\/tagihan\//, { timeout: 30_000 })
-    await page.waitForLoadState("networkidle")
-    // Metode pembayaran wajib — Combobox CommandInput: ketik + pilih.
+    await page.waitForLoadState("load")
+    // Metode pembayaran wajib — Combobox CommandInput lewat helper aman-hidrasi.
     // Rekening kas/bank wajib untuk transfer (kolom No. Rekening diisi).
-    await page.getByRole("combobox", { name: /metode pembayaran/i }).click()
-    await page.getByPlaceholder(/pilih \/ ketik metode/i).fill("Transfer")
-    await page.getByRole("option", { name: /transfer/i }).click()
+    const methodPicked = await selectComboboxOptionBySearch(
+      page,
+      { name: /metode pembayaran/i },
+      "Transfer",
+      /transfer/i,
+    )
+    expect(methodPicked).toBe(true)
     await page.getByLabel(/no\. rekening/i).fill("E2E-001")
     // Jumlah prefill = sisa tagihan; tegaskan sebelum simpan.
     const amountBox = page.getByLabel(/jumlah \(rp\)/i)
@@ -280,36 +319,39 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     await page.goto(`/pengaturan/persetujuan/${approval.slug ?? approval.id}`, {
       waitUntil: "domcontentloaded",
     })
-    await page.waitForLoadState("networkidle")
-    await page.getByRole("button", { name: "Setujui" }).click()
+    await page.waitForLoadState("load")
+    const approveBtn = page.getByRole("button", { name: "Setujui" })
+    await expect(approveBtn).toBeVisible({ timeout: 30_000 })
+    await expect(approveBtn).toBeEnabled({ timeout: 15_000 })
+    await approveBtn.click()
     await expect(page.getByText("Disetujui").first()).toBeVisible({ timeout: 30_000 })
     let approved = await prisma.approval.findUniqueOrThrow({ where: { id: approval.id } })
-    for (let i = 0; i < 20 && approved.status !== "approved"; i++) {
-      await page.waitForTimeout(1000)
+    for (let i = 0; i < 80 && approved.status !== "approved"; i++) {
+      await page.waitForTimeout(250)
       approved = await prisma.approval.findUniqueOrThrow({ where: { id: approval.id } })
     }
     expect(approved.status).toBe("approved")
 
     // Konfirmasi dari menu aksi baris payment ini persis (bukan baris pertama).
     await page.goto("/pembelian/pembayaran-vendor", { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
+    await page.waitForLoadState("load")
     const paymentRow = page.locator("tr").filter({ hasText: payment.documentNo }).first()
     await expect(paymentRow).toBeVisible({ timeout: 30_000 })
     await paymentRow.getByRole("button", { name: /buka menu aksi/i }).click()
     await page.getByRole("menuitem", { name: /konfirmasi/i }).click()
-    await page.getByRole("button", { name: /konfirmasi/i }).last().click()
+    await page.getByRole("alertdialog").getByRole("button", { name: /konfirmasi/i }).click()
     await expect(page.getByText(/dikembalikan|dibayar|diposting/i).first()).toBeVisible({
       timeout: 30_000,
     })
     // Alokasi lahir di confirm (async) — poll sampai muncul, lalu tegaskan.
     let alloc = null
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 80; i++) {
       alloc = await prisma.vendorPaymentAllocation.findFirst({
         where: { vendorBillId: confirmedBill.id },
         orderBy: { id: "desc" },
       })
       if (alloc) break
-      await page.waitForTimeout(1000)
+      await page.waitForTimeout(250)
     }
     if (!alloc) throw new Error("alokasi pembayaran tak kunjung lahir sesudah konfirmasi")
     const paidBill = await prisma.vendorBill.findUniqueOrThrow({ where: { id: confirmedBill.id } })

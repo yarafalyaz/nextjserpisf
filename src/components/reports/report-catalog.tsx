@@ -137,7 +137,7 @@ export function ReportCatalog({ categories }: { categories: ReportCatalogCategor
                     setQuery("")
                   }}
                   className={
-                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors " +
+                    "flex min-h-11 md:min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors " +
                     (isActive
                       ? "bg-primary font-semibold text-primary-foreground"
                       : "text-foreground hover:bg-muted")
@@ -183,7 +183,7 @@ export function ReportCatalog({ categories }: { categories: ReportCatalogCategor
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="text-xs text-muted-foreground hover:text-foreground shrink-0 underline"
+                className="inline-flex min-h-11 min-w-11 md:min-h-9 md:min-w-0 cursor-pointer items-center justify-center px-2 text-xs text-muted-foreground hover:text-foreground shrink-0 underline"
               >
                 Reset
               </button>

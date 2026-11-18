@@ -97,8 +97,15 @@ const NUMBERING_EXCEPTIONS = new Set([
 const exceptionKey = (table: string, value: string | null): string =>
   `${table}/${(value ?? "").trim()}`
 
-/** `010/SO/IRO/10/2026` → seq 10, keluarga `SO-2026-10`. */
-const COMPLEX_RE = /^(\d+)\/([A-Z0-9]+)\/[A-Z0-9]+\/(\d{2})\/(\d{4})$/
+/** Pengecualian eksplisit + penanda seed dinamis `E2E-SEED-<timestamp>` milik sales-chain. */
+function isNumberingException(table: string, value: string | null): boolean {
+  const trimmed = (value ?? "").trim()
+  if (NUMBERING_EXCEPTIONS.has(exceptionKey(table, trimmed))) return true
+  return table === "stock_moves" && /^E2E-SEED-\d+$/.test(trimmed)
+}
+
+/** `010/SO/IRO/10/2026` → seq 10, keluarga `SO-2026-10`; `001/JRN-RV/YRA/11/2026` → `JRN-RV-2026-11`. */
+const COMPLEX_RE = /^(\d+)\/([A-Z0-9-]+)\/[A-Z0-9]+\/(\d{2})\/(\d{4})$/
 /** `EMP-00001` → prefix `EMP`, seq 1. */
 const SIMPLE_RE = /^([A-Z0-9]+)-(\d+)$/
 
@@ -159,7 +166,7 @@ describe.skipIf(SKIP)("kabar state penomoran tersimpan (DB, read-only)", () => {
           bumpIssued(`${prefix}`, Number(seq), pair.table)
           continue
         }
-        if (!NUMBERING_EXCEPTIONS.has(exceptionKey(pair.table, value))) {
+        if (!isNumberingException(pair.table, value)) {
           unexpected.push(exceptionKey(pair.table, value))
         }
       }
@@ -175,11 +182,11 @@ describe.skipIf(SKIP)("kabar state penomoran tersimpan (DB, read-only)", () => {
           const [, prefix, seq] = simpleMatch
           // Kode manual (nomor layanan selalu lahir BERSAMA kunci counter-nya)
           // di-hijaukan hanya via allowlist DUA ARAH.
-          if (!counter.has(prefix) && NUMBERING_EXCEPTIONS.has(exceptionKey(pair.table, value))) continue
+          if (!counter.has(prefix) && isNumberingException(pair.table, value)) continue
           bumpIssued(`${prefix}`, Number(seq), pair.table)
           continue
         }
-        if (!NUMBERING_EXCEPTIONS.has(exceptionKey(pair.table, value))) {
+        if (!isNumberingException(pair.table, value)) {
           unexpected.push(exceptionKey(pair.table, value))
         }
       }
@@ -210,10 +217,11 @@ describe.skipIf(SKIP)("kabar state penomoran tersimpan (DB, read-only)", () => {
     const counter = await loadCounter()
     const rows = await loadRawRows(JOURNAL_PAIR)
 
-    // Rezonora journal:
+    // Rezim jurnal:
     //  (a) `005/JRN/IRO/10/2026`       → kunci `JRN-2026-10`, seq 5
     //  (b) `PAY/19/20261031155159-0008` → kunci `JRN-PAY-2026-10`, seq 8 (stamp slash)
-    //  (c) `JRN-202610-00006`          → kunci `JRN-2026-10`, seq 6  (stamp polos)
+    //  (c) `JRN-202610-00006`          → kunci `JOURNAL`, seq 6 (dipakai bank-transfer,
+    //      purchase-advance, tax-payment, asset.actions, asset-change-event, cron penyusutan)
     const stampSlashRe = /^([A-Za-z][A-Za-z0-9-]*)\/(\d+)\/(\d{14})-(\d+)$/
     const stampPlainRe = /^([A-Za-z][A-Za-z0-9-]*)-(\d{6})-(\d+)$/
 
@@ -252,10 +260,14 @@ describe.skipIf(SKIP)("kabar state penomoran tersimpan (DB, read-only)", () => {
       const stampPlain = stampPlainRe.exec(value)
       if (stampPlain) {
         const [, prefix, yyyymm, seq] = stampPlain
-        bumpIssued(`${prefix}-${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`, Number(seq), value)
+        const counterKey =
+          prefix === "JRN"
+            ? "JOURNAL"
+            : `${prefix}-${yyyymm.slice(0, 4)}-${yyyymm.slice(4, 6)}`
+        bumpIssued(counterKey, Number(seq), value)
         continue
       }
-      if (!NUMBERING_EXCEPTIONS.has(exceptionKey(JOURNAL_PAIR.table, value))) {
+      if (!isNumberingException(JOURNAL_PAIR.table, value)) {
         unexpected.push(exceptionKey(JOURNAL_PAIR.table, value))
       }
     }

@@ -29,6 +29,14 @@ interface UserAccessPanelProps {
   allWarehouseAccess: boolean
 }
 
+function accessChipClass(isSelected: boolean): string {
+  return `inline-flex min-h-11 md:min-h-9 items-center justify-center px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer disabled:opacity-60 ${
+    isSelected
+      ? "bg-primary text-primary-foreground border-primary"
+      : "bg-surface border-default hover:border-primary/50 text-foreground"
+  }`
+}
+
 export function UserAccessPanel({
   userId,
   isActive,
@@ -128,11 +136,7 @@ export function UserAccessPanel({
               aria-pressed={isSelected}
               onClick={() => toggleRole(role.id)}
               disabled={isPending}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer disabled:opacity-60 ${
-                isSelected
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-surface border-default hover:border-primary/50 text-foreground"
-              }`}
+              className={accessChipClass(isSelected)}
             >
               {role.label}
             </button>
@@ -191,11 +195,7 @@ export function UserAccessPanel({
                   aria-pressed={isSelected}
                   onClick={() => toggleWarehouse(wh.id)}
                   disabled={isPending}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer disabled:opacity-60 ${
-                    isSelected
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-surface border-default hover:border-primary/50 text-foreground"
-                  }`}
+                  className={accessChipClass(isSelected)}
                 >
                   {wh.name}
                 </button>

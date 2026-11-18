@@ -62,14 +62,25 @@ describe.skipIf(SKIP)("integritas lapisan FIFO + tautan pembayaran (DB, read-onl
       }>>
     `
       SELECT l.item_id, l.warehouse_id,
-             SUM(l.qty_in) AS l_in, SUM(l.qty_out) AS l_out,
-             COALESCE(SUM(CASE WHEN m.impact = 'IN' THEN m.qty END), 0) AS m_in,
-             COALESCE(SUM(CASE WHEN m.impact = 'OUT' THEN m.qty END), 0) AS m_out
-      FROM inventory_layers l
-      LEFT JOIN stock_moves m ON m.item_id = l.item_id
-                             AND m.warehouse_id <=> l.warehouse_id
-                             AND m.status = 'posted'
-      GROUP BY l.item_id, l.warehouse_id
+             l.l_in, l.l_out,
+             COALESCE(m.m_in, 0) AS m_in,
+             COALESCE(m.m_out, 0) AS m_out
+      FROM (
+        SELECT item_id, warehouse_id,
+               SUM(qty_in) AS l_in,
+               SUM(qty_out) AS l_out
+        FROM inventory_layers
+        GROUP BY item_id, warehouse_id
+      ) l
+      LEFT JOIN (
+        SELECT item_id, warehouse_id,
+               COALESCE(SUM(CASE WHEN impact = 'IN' THEN qty END), 0) AS m_in,
+               COALESCE(SUM(CASE WHEN impact = 'OUT' THEN qty END), 0) AS m_out
+        FROM stock_moves
+        WHERE status = 'posted'
+        GROUP BY item_id, warehouse_id
+      ) m ON m.item_id = l.item_id
+         AND m.warehouse_id <=> l.warehouse_id
     `
     const drifted = agg.filter(
       (row) =>
