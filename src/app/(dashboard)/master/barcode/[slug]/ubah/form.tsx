@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBarcode } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 export function BarcodeEditForm({ id, barcode, itemId, type }: { id: number; barcode: string; itemId: number; type: string }) {
   const router = useRouter()
@@ -17,11 +19,13 @@ export function BarcodeEditForm({ id, barcode, itemId, type }: { id: number; bar
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const res = await updateBarcode(id, formData)
-      if (res && !res.success) { showError(res.error || "Gagal menyimpan data"); return }
-      showSuccess("Data berhasil diperbarui")
-      router.push("/master/barcode")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await updateBarcode(id, formData)
+        if (res && !res.success) { showError(res.error || "Gagal menyimpan data"); return }
+        showSuccess("Data berhasil diperbarui")
+        router.push("/master/barcode")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -53,10 +57,10 @@ export function BarcodeEditForm({ id, barcode, itemId, type }: { id: number; bar
           />
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()}>Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : "Perbarui"}</Button>
-      </div>
+      <FormActions>
+        <Button className="w-full md:w-auto" type="button" onPress={() => router.back()}>Batal</Button>
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : "Perbarui"}</Button>
+      </FormActions>
     </form>
   )
 }

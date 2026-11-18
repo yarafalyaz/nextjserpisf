@@ -398,4 +398,20 @@ describe("sales return jasa non-stok G2", () => {
     )
     expect(mocks.createInLayer).toHaveBeenCalledTimes(1)
   })
+
+  it("regresi L2: retur item berserial menolak qty dasar pecahan hasil konversi UOM", async () => {
+    mocks.toBaseFactor.mockResolvedValue(3)
+    const { spies } = wireTx({
+      items: [{ itemId: 3, qty: 0.5, cost: 100, serialNumbers: ["SN-A", "SN-B"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "BOX" }],
+      serialFindMany: vi.fn().mockResolvedValue([
+        { id: 91, serialNumber: "SN-A", status: "used" },
+        { id: 92, serialNumber: "SN-B", status: "used" },
+      ]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/bilangan bulat/)
+    expect(spies.serialUpdateMany).not.toHaveBeenCalled()
+  })
 })

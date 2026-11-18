@@ -55,13 +55,14 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 function DuplicateCandidateRow({ candidate }: { candidate: LeadDuplicateCandidate }) {
   return (
     <li className="rounded-lg border border-default bg-surface px-3 py-2.5 text-sm">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-medium">
-          {candidate.leadNumber ?? "-"} — {candidate.name}
+          {candidate.leadNumber ?? "-"} - {candidate.name}
           {candidate.company ? ` (${candidate.company})` : ""}
         </span>
         {candidate.canOpen && candidate.slug ? (
@@ -380,10 +381,10 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
           </AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Lead"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" className="w-full md:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full md:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Lead"}</Button>
+      </FormActions>
     </form>
   )
 }

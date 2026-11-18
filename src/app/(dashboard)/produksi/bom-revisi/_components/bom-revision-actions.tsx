@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/shadcn/button"
 import { Button as AppButton } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { useSession } from "next-auth/react"
 import {
   approveBomRevision,
@@ -51,11 +52,16 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
 
   function run(action: () => Promise<{ success: boolean; error?: string }>, fallback: string, success: string) {
     startTransition(async () => {
-      const res = await action()
-      if (!res.success) showError(res.error || fallback)
-      else showSuccess(success)
-      setDialog(null)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await action()
+          if (!res.success) showError(res.error || fallback)
+          else showSuccess(success)
+          router.refresh()
+        },
+        fallback,
+        () => setDialog(null),
+      )
     })
   }
 

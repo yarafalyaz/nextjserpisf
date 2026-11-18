@@ -3,7 +3,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { safeAdd, safeSubtract } from "@/lib/utils/math";
+import { safeSubtract } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -1531,8 +1531,13 @@ export async function disposeAsset(formData: FormData) {
           accumulatedImpairment: lockedPosted.accumulatedImpairmentPosted.toNumber(),
         });
 
-        const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 2), 0);
-        const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 2), 0);
+        const totalDebitSen = built.reduce((s, e) => s + Math.round(e.debit * 100), 0);
+        const totalCreditSen = built.reduce((s, e) => s + Math.round(e.credit * 100), 0);
+        if (totalDebitSen !== totalCreditSen) {
+          throw new Error(`Jurnal pelepasan aset tidak balance: D=${totalDebitSen / 100} K=${totalCreditSen / 100}`);
+        }
+        const totalDebit = totalDebitSen / 100;
+        const totalCredit = totalCreditSen / 100;
         // Akun pelepasan dinilai dari entri yang benar-benar terbit: akun
         // mati antara perolehan dan pelepasan harus menolak + rollback klaim
         // status, bukan menempel di jurnal POSTED.

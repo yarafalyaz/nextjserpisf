@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { createReconciliationAdjustment } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -35,19 +36,21 @@ export function AdjustmentForm({ reconciliationId }: { reconciliationId: number 
       return
     }
     startTransition(async () => {
-      const fd = new FormData(form)
-      fd.set("idempotencyKey", idempotencyKeyRef.current)
-      const res = await createReconciliationAdjustment(reconciliationId, fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menambah penyesuaian")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Item penyesuaian ditambahkan")
-      form.reset()
-      setType("")
-      setAmount(0)
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        fd.set("idempotencyKey", idempotencyKeyRef.current)
+        const res = await createReconciliationAdjustment(reconciliationId, fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menambah penyesuaian")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Item penyesuaian ditambahkan")
+        form.reset()
+        setType("")
+        setAmount(0)
+        router.refresh()
+      }, "Gagal menambah penyesuaian")
     })
   }
 

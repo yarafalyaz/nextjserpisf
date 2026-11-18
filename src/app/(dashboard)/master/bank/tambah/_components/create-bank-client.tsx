@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createBank } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 
 export default function CreateBankPage() {
@@ -19,14 +21,16 @@ export default function CreateBankPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const result = await createBank(formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess("Bank berhasil ditambahkan")
-      router.push("/master/bank")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createBank(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Bank berhasil ditambahkan")
+        router.push("/master/bank")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -72,12 +76,12 @@ export default function CreateBankPage() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-          <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-          <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-bank">
+        <FormActions>
+          <Button className="w-full md:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
+          <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-bank">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   )

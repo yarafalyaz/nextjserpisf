@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason, ReturnTaxNoteFields } from "@/components/forms/return-items-section"
 
@@ -35,7 +35,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(returnData?.date ?? wibDateOnly(new Date()))
   const [taxReturnNoteDate, setTaxReturnNoteDate] = useState(returnData?.taxReturnNoteDate ?? "")
   const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
   const [customerId, setCustomerId] = useState(returnData?.customerId ? String(returnData.customerId) : "")

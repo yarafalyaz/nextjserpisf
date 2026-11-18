@@ -7,6 +7,8 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
+import { runUiAction } from "@/components/ui/async-action"
 
 interface TaxEditFormProps {
   tax: { id: number; name: string; rate: number }
@@ -19,15 +21,25 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
-      const result = await updateTax(tax.id, formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
+    const rawRate = String(formData.get("rate") ?? "").trim()
+    if (rawRate !== "") {
+      const rate = Number(rawRate)
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        showError("Tarif pajak harus antara 0% dan 100%")
         return
       }
-      showSuccess("Pajak berhasil diperbarui")
-      router.push("/master/pajak")
-      router.refresh()
+    }
+    startTransition(async () => {
+      await runUiAction(async () => {
+        const result = await updateTax(tax.id, formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Pajak berhasil diperbarui")
+        router.push("/master/pajak")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -40,15 +52,15 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="rate">Tarif (%) *</Label>
-          <Input id="rate" name="rate" type="number" step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
+          <Input id="rate" name="rate" type="number" min={0} max={100} step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending}>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Perbarui"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

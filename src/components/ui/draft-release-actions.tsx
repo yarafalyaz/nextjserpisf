@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { useSession } from "next-auth/react"
 import { entityHref, entityEditHref, type SluggedEntity } from "@/lib/utils/entity-url"
 
@@ -67,27 +68,37 @@ export function DraftReleaseActions({
 
   function handleRelease() {
     startTransition(async () => {
-      const res = await releaseAction(entity.id)
-      if (!res.success) {
-        showError(res.error || releaseErrorFallback)
-      } else {
-        showSuccess(releaseSuccess)
-      }
-      setDialog(null)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await releaseAction(entity.id)
+          if (!res.success) {
+            showError(res.error || releaseErrorFallback)
+          } else {
+            showSuccess(releaseSuccess)
+          }
+          router.refresh()
+        },
+        releaseErrorFallback,
+        () => setDialog(null),
+      )
     })
   }
 
   function handleDelete() {
     startTransition(async () => {
-      const res = await deleteAction(entity.id)
-      if (!res.success) {
-        showError(res.error || deleteErrorFallback)
-      } else {
-        showSuccess(deleteSuccess)
-      }
-      setDialog(null)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await deleteAction(entity.id)
+          if (!res.success) {
+            showError(res.error || deleteErrorFallback)
+          } else {
+            showSuccess(deleteSuccess)
+          }
+          router.refresh()
+        },
+        deleteErrorFallback,
+        () => setDialog(null),
+      )
     })
   }
 

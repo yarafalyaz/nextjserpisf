@@ -5,6 +5,7 @@ import { Calculator } from "@/components/ui/fontawesome-icons"
 import { useRouter } from "next/navigation"
 import { calculateStandardCost } from "@/actions/manufacturing.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 
 /**
@@ -23,13 +24,15 @@ export function RecalculateStandardCostButton({ productId }: { productId: number
       isDisabled={isPending}
       onPress={() =>
         startTransition(async () => {
-          const res = await calculateStandardCost(productId)
-          if (res.success) {
-            showSuccess("Harga pokok standar dihitung ulang.")
-            router.refresh()
-          } else {
-            showError(res.error || "Gagal menghitung harga pokok standar.")
-          }
+          await runUiAction(async () => {
+            const res = await calculateStandardCost(productId)
+            if (res.success) {
+              showSuccess("Harga pokok standar dihitung ulang.")
+              router.refresh()
+            } else {
+              showError(res.error || "Gagal menghitung harga pokok standar.")
+            }
+          }, "Gagal menghitung harga pokok standar.")
         })
       }
     >

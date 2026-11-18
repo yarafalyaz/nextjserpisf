@@ -10,6 +10,8 @@
  * progressive method with PTKP based on marital status + dependents.
  */
 
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+
 // ── BPJS (employee-deducted portion) ─────────────────────────────────────────
 const BPJS_HEALTH_EMPLOYEE_RATE = 0.01 // 1% Kesehatan (employee)
 const BPJS_HEALTH_CEILING = 12_000_000 // salary ceiling for Kesehatan
@@ -124,14 +126,15 @@ type RuleDb = {
  * Key tanpa baris efektif → fallback 2024 (dicatat di fromFallback).
  */
 export async function getStatutoryParams(db: RuleDb, asOf: Date = new Date()): Promise<StatutoryParams> {
+  const refDate = getWibTodayUtcDate(asOf)
   const keys = RULE_KEYS.map(ruleKeyOf)
   let rows: { key: string; value: unknown; effectiveFrom: Date; effectiveTo: Date | null }[] = []
   try {
     rows = await db.payrollStatutoryRule.findMany({
       where: {
         key: { in: keys },
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: asOf } } as never],
+        effectiveFrom: { lte: refDate },
+        OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: refDate } } as never],
       },
       orderBy: { effectiveFrom: "desc" },
     })
@@ -160,7 +163,7 @@ export async function getStatutoryParams(db: RuleDb, asOf: Date = new Date()): P
       out[k] = v
     }
   }
-  return { ...(out as unknown as StatutoryParams), fromFallback, asOf: asOf.toISOString().slice(0, 10) }
+  return { ...(out as unknown as StatutoryParams), fromFallback, asOf: refDate.toISOString().slice(0, 10) }
 }
 
 /**
@@ -357,15 +360,16 @@ type TerDb = {
  * (effectiveFrom terbesar ≤ acuan) menang; rantai bracket wajib utuh dari 0
  * sampai terbuka — selain itu tabel dianggap tidak lengkap (null). */
 export async function getTerBrackets(db: TerDb, category: TerCategory, asOf: Date): Promise<TerBracket[] | null> {
+  const refDate = getWibTodayUtcDate(asOf)
   const rows = await db.payrollTerBracket.findMany({
     where: {
       category,
-      effectiveFrom: { lte: asOf },
+      effectiveFrom: { lte: refDate },
       // Seed menulis effectiveTo INKLUSIF (seperti jendela statutori di atas):
       // asOf persis di hari terakhir tetap memakai tabel ini. `gt` lama
       // mengecualikan hari terakhir lalu lolos filter effectiveFrom-lerbesar,
       // meninggalkan versi lama / kosong → pajak tanpa tabel sah.
-      OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: asOf } } as never],
+      OR: [{ effectiveTo: null } as never, { effectiveTo: { gte: refDate } } as never],
     },
     orderBy: { lowerBound: "asc" },
   })

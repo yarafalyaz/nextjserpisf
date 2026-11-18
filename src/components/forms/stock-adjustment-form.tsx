@@ -20,7 +20,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface AdjustmentFormProps {
   warehouses: { id: number; name: string }[];
@@ -121,11 +121,15 @@ export function StockAdjustmentForm({
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (adjItems.some((item) => !Number.isFinite(item.newQty) || item.newQty < 0)) {
+      showError("Stok baru tidak boleh negatif");
+      return;
+    }
     startTransition(async () => {
       try {
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
-        formData.append("date", adjustment?.date ?? toLocalDateOnly(new Date()));
+        formData.append("date", adjustment?.date ?? wibDateOnly(new Date()));
         formData.append("items", JSON.stringify(adjItems.map((item) => ({
           ...item,
           serialNumbers: item.serialNumbers.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
@@ -304,12 +308,15 @@ export function StockAdjustmentForm({
                       <td className="py-2 px-2">
                         <Input
                           type="number"
+                          min={0}
+                          step="any"
                           value={item.newQty}
-                          onChange={(e) =>
-                            updateItem(i, "newQty", Number(e.target.value))
-                          }
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            updateItem(i, "newQty", Number.isFinite(val) ? Math.max(0, val) : 0);
+                          }}
                           aria-label={`Stok baru baris ${i + 1}`}
-                          className="h-9 w-24 text-xs text-right font-mono tabular-nums"
+                          className="h-11 md:h-9 w-24 text-xs text-right font-mono tabular-nums"
                         />
                       </td>
                       <td
@@ -324,7 +331,7 @@ export function StockAdjustmentForm({
                           value={item.reason}
                           onChange={(e) => updateItem(i, "reason", e.target.value)}
                           aria-label={`Alasan baris ${i + 1}`}
-                          className="h-9 text-xs"
+                          className="h-11 md:h-9 text-xs"
                           placeholder="Alasan"
                         />
                       </td>

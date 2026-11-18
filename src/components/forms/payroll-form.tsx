@@ -12,6 +12,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { CheckCircle, Loader2 } from "@/components/ui/fontawesome-icons"
 
 interface PayrollFormProps {
@@ -123,7 +124,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
   }
 
   return (
-    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={initialData?.id ? "Formulir ubah penggajian" : "Formulir tambah penggajian"} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={initialData?.id ? "Formulir ubah penggajian" : "Formulir tambah penggajian"} className="bg-surface rounded-xl border border-default shadow-sm overflow-x-clip">
       <div className="p-4 sm:p-6 border-b border-default bg-surface-secondary/30 flex flex-wrap justify-between items-center gap-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <CheckCircle className="text-primary" size={18} />
@@ -289,11 +290,13 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         </div>
       </div>
 
-      <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 p-4 sm:p-6 border-t border-default bg-surface">
-        <Button type="button" onPress={() => router.back()} variant="secondary">Batal</Button>
-        <Button type="submit" isDisabled={isPending || isEstimating} variant="primary">
-          {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Penggajian"}
-        </Button>
+      <div className="px-4 sm:px-6 md:pb-6">
+        <FormActions>
+          <Button type="button" onPress={() => router.back()} variant="secondary" className="w-full md:w-auto">Batal</Button>
+          <Button type="submit" isDisabled={isPending || isEstimating} variant="primary" className="w-full md:w-auto">
+            {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Penggajian"}
+          </Button>
+        </FormActions>
       </div>
     </form>
   )

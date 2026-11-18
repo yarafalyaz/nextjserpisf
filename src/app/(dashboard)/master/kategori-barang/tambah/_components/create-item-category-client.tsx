@@ -8,6 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { Input } from "@/components/ui/shadcn/input";
 import { Label } from "@/components/ui/shadcn/label";
 import { Button } from "@/components/ui/button";
+import { FormActions } from "@/components/ui/form-section";
 
 export default function CreateItemCategoryPage() {
   const router = useRouter();
@@ -69,11 +70,11 @@ export default function CreateItemCategoryPage() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-          <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()}>
+        <FormActions>
+          <Button className="w-full md:w-auto" type="button" onPress={() => router.back()}>
             Batal
           </Button>
-          <Button className="w-full sm:w-auto"
+          <Button className="w-full md:w-auto"
             type="submit"
             variant="primary"
             isDisabled={isPending}
@@ -81,7 +82,7 @@ export default function CreateItemCategoryPage() {
           >
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   );

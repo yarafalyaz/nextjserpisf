@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
@@ -20,14 +21,16 @@ export function StatutoryRuleForm({ canCreate }: { canCreate: boolean }) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await createStatutoryRule(new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan aturan")
-        return
-      }
-      showSuccess("Aturan ditambahkan")
-      form.reset()
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await createStatutoryRule(new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan aturan")
+          return
+        }
+        showSuccess("Aturan ditambahkan")
+        form.reset()
+        router.refresh()
+      }, "Gagal menyimpan aturan")
     })
   }
 
@@ -43,7 +46,7 @@ export function StatutoryRuleForm({ canCreate }: { canCreate: boolean }) {
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="ruleValue">Nilai *</Label>
-        <Input id="ruleValue" name="value" type="number" step="any" required />
+        <Input id="ruleValue" name="value" type="number" min={0} step="any" required />
       </div>
       <AppDatePicker label="Berlaku Sejak *" name="effectiveFrom" required className="flex-1" />
       <AppDatePicker label="Berlaku Sampai" name="effectiveTo" className="flex-1" />
@@ -69,13 +72,15 @@ export function CloseRuleForm({ id, canEdit }: { id: number; canEdit: boolean })
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await closeStatutoryRule(id, new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal menutup aturan")
-        return
-      }
-      showSuccess("Aturan ditutup")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await closeStatutoryRule(id, new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal menutup aturan")
+          return
+        }
+        showSuccess("Aturan ditutup")
+        router.refresh()
+      }, "Gagal menutup aturan")
     })
   }
 

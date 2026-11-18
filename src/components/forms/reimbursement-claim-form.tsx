@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 function newIdempotencyKey(): string {
   return crypto.randomUUID()
@@ -40,7 +41,7 @@ export function ReimbursementClaimForm({ categories, projects }: ReimbursementCl
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [amount, setAmount] = useState(0)
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[] | null>(null)
@@ -92,7 +93,7 @@ export function ReimbursementClaimForm({ categories, projects }: ReimbursementCl
       onSubmit={onSubmit}
       aria-busy={isPending}
       aria-label="Formulir ajukan klaim reimbursement"
-      className="bg-surface rounded-xl border border-default shadow-sm p-6"
+      className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6"
     >
       <FormGrid>
         <FormGroup>
@@ -190,14 +191,14 @@ export function ReimbursementClaimForm({ categories, projects }: ReimbursementCl
         </div>
       )}
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()}>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">
           Batal
         </Button>
-        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-reimbursement-claim">
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-reimbursement-claim" className="w-full md:w-auto">
           {isPending ? "Mengajukan..." : "Ajukan Klaim"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

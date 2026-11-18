@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import {
   confirmProductionOrder,
   issueMaterial,
@@ -77,20 +78,24 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
 
   function doConfirm() {
     startTransition(async () => {
-      const res = await confirmProductionOrder(orderId)
-      if (!res.success) return showError(res.error || "Gagal mengonfirmasi")
-      showSuccess("Perintah produksi dikonfirmasi")
-      setConfirmOpen(false)
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await confirmProductionOrder(orderId)
+        if (!res.success) return showError(res.error || "Gagal mengonfirmasi")
+        showSuccess("Perintah produksi dikonfirmasi")
+        setConfirmOpen(false)
+        router.refresh()
+      }, "Gagal mengonfirmasi")
     })
   }
 
   function doStart() {
     startTransition(async () => {
-      const res = await startProductionOrder(orderId)
-      if (!res.success) return showError(res.error || "Gagal memulai")
-      showSuccess("Perintah produksi dimulai")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await startProductionOrder(orderId)
+        if (!res.success) return showError(res.error || "Gagal memulai")
+        showSuccess("Perintah produksi dimulai")
+        router.refresh()
+      }, "Gagal memulai")
     })
   }
 
@@ -109,18 +114,20 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       return showError("Kuantitas yang diselesaikan harus lebih dari 0")
     }
     startTransition(async () => {
-      const res = await completeProductionOrder(orderId, serialNumbers, qty)
-      if (!res.success) return showError(res.error || "Gagal menyelesaikan")
-      if ("isFinal" in res && !res.isFinal) {
-        showSuccess(`Diselesaikan parsial: ${qty} unit. Sisa ${Math.round(((remainingQty - (qty ?? 0)) * 100)) / 100} unit tetap WIP.`)
-      } else {
-        const variance = "variance" in res ? res.variance : 0
-        showSuccess(`Selesai. Varians: ${variance.toLocaleString("id-ID")}`)
-      }
-      setCompleteOpen(false)
-      setSerialNumbersText("")
-      setCompleteQty("")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await completeProductionOrder(orderId, serialNumbers, qty)
+        if (!res.success) return showError(res.error || "Gagal menyelesaikan")
+        if ("isFinal" in res && !res.isFinal) {
+          showSuccess(`Diselesaikan parsial: ${qty} unit. Sisa ${Math.round(((remainingQty - (qty ?? 0)) * 100)) / 100} unit tetap WIP.`)
+        } else {
+          const variance = "variance" in res ? res.variance : 0
+          showSuccess(`Selesai. Varians: ${variance.toLocaleString("id-ID")}`)
+        }
+        setCompleteOpen(false)
+        setSerialNumbersText("")
+        setCompleteQty("")
+        router.refresh()
+      }, "Gagal menyelesaikan")
     })
   }
 
@@ -141,16 +148,18 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       return showError(e instanceof Error ? e.message : "Data scrap tidak valid")
     }
     startTransition(async () => {
-      const res = await issueMaterial(orderId, [args])
-      if (!res.success) return showError(res.error || "Gagal mengeluarkan bahan")
-      showSuccess("Bahan dikeluarkan")
-      setIssueOpen(false)
-      setIssueItemId(null)
-      setIssueQty("")
-      setIssueScrapQty("")
-      setIssueScrapReasonCode(null)
-      setIssueScrapNote("")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await issueMaterial(orderId, [args])
+        if (!res.success) return showError(res.error || "Gagal mengeluarkan bahan")
+        showSuccess("Bahan dikeluarkan")
+        setIssueOpen(false)
+        setIssueItemId(null)
+        setIssueQty("")
+        setIssueScrapQty("")
+        setIssueScrapReasonCode(null)
+        setIssueScrapNote("")
+        router.refresh()
+      }, "Gagal mengeluarkan bahan")
     })
   }
 

@@ -62,6 +62,8 @@ function buildCsp(req: NextRequest, nonce: string): string {
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     isProd ? "connect-src 'self' https:" : "connect-src 'self' https: ws:",
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -102,8 +104,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow actual static files (specific extensions only)
-  if (STATIC_EXTENSIONS.test(pathname)) {
+  // Allow actual static files (specific extensions only), kecuali path metadata
+  // publik seperti /sw.js yang wajib menerima header keamanan, CSP, dan no-cache.
+  if (STATIC_EXTENSIONS.test(pathname) && !PUBLIC_METADATA_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
@@ -116,11 +119,14 @@ export async function proxy(req: NextRequest) {
   const nextPage = () => NextResponse.next({ request: { headers: req.headers } });
   warnRateLimitRedisMissingOnce();
 
-  // Manifest PWA, robots, dan sitemap harus dapat dibaca browser/crawler
-  // sebelum ada sesi. Bypass ini hanya untuk tiga path exact di atas;
-  // semua halaman dan API lain tetap melewati aturan auth di bawah.
+  // Manifest PWA, robots, sitemap, halaman offline, dan service worker harus
+  // dapat dibaca browser/crawler sebelum ada sesi, tetap membawa header keamanan.
   if (PUBLIC_METADATA_PATHS.has(pathname)) {
-    return addSecurityHeaders(req, nextPage());
+    const response = addSecurityHeaders(req, nextPage());
+    if (pathname === "/sw.js") {
+      response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    }
+    return response;
   }
 
   const ip = getClientIp(req);

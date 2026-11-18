@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { Button } from "@/components/ui/button"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { FormActions } from "@/components/ui/form-section"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import type { DeliveryOrderLineOption } from "../../app/(dashboard)/penjualan/surat-jalan/_lib/order-lines"
 
 interface DeliveryOrderSalesOrder {
@@ -48,7 +49,7 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [date, setDate] = useState(deliveryOrder?.date ?? toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(deliveryOrder?.date ?? wibDateOnly(new Date()))
   const [deliveryDate, setDeliveryDate] = useState(deliveryOrder?.deliveryDate ?? "")
   const [salesOrderId, setSalesOrderId] = useState(
     deliveryOrder?.salesOrderId
@@ -224,7 +225,7 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
                         type="number"
                         min={0}
                         step="0.01"
-                        className="h-9 text-xs text-right font-mono tabular-nums"
+                        className="h-11 md:h-9 text-xs text-right font-mono tabular-nums"
                         aria-label={`Jumlah kirim baris ${index + 1}`}
                         value={row.qty}
                         onChange={(e) => updateItemQty(index, e.target.value)}
@@ -238,10 +239,10 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
         )}
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" className="w-full md:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full md:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

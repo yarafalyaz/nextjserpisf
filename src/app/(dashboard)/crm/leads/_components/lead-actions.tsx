@@ -11,6 +11,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { convertLead, addLeadActivity, completeLeadActivity, reopenLeadActivity } from "@/actions/crm.actions"
 import { LEAD_ACTIVITY_TYPE_LABELS, LEAD_ACTIVITY_TYPE_OPTIONS } from "@/lib/utils/status-labels"
 
@@ -24,16 +25,20 @@ export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canC
 
   function handleConvert() {
     startTransition(async () => {
-      const res = await convertLead(leadId)
-      if (!res.success) {
-        showError(res.error || "Gagal mengonversi prospek")
-        setOpen(false)
-        return
-      }
-      showSuccess("Prospek berhasil dikonversi menjadi pelanggan")
-      setOpen(false)
-      router.push(`/master/pelanggan/${res.customerId}`)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await convertLead(leadId)
+          if (!res.success) {
+            showError(res.error || "Gagal mengonversi prospek")
+            return
+          }
+          showSuccess("Prospek berhasil dikonversi menjadi pelanggan")
+          router.push(`/master/pelanggan/${res.customerId}`)
+          router.refresh()
+        },
+        "Gagal mengonversi prospek",
+        () => setOpen(false),
+      )
     })
   }
 
@@ -72,21 +77,23 @@ export function AddLeadActivityForm({ leadId, canCreate = true }: { leadId: numb
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      fd.set("type", type)
-      if (scheduledAt) fd.set("scheduledAt", scheduledAt)
-      fd.set("idempotencyKey", idempotencyKeyRef.current!)
-      const res = await addLeadActivity(leadId, fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menambahkan aktivitas")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Aktivitas ditambahkan")
-      form.reset()
-      setType("note")
-      setScheduledAt("")
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        fd.set("type", type)
+        if (scheduledAt) fd.set("scheduledAt", scheduledAt)
+        fd.set("idempotencyKey", idempotencyKeyRef.current!)
+        const res = await addLeadActivity(leadId, fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menambahkan aktivitas")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Aktivitas ditambahkan")
+        form.reset()
+        setType("note")
+        setScheduledAt("")
+        router.refresh()
+      }, "Gagal menambahkan aktivitas")
     })
   }
 
@@ -160,19 +167,21 @@ export function LeadActivityCompletionButton({
 
   function handleClick() {
     startTransition(async () => {
-      const res = completedAt
-        ? await reopenLeadActivity(leadId, activityId)
-        : await completeLeadActivity(leadId, activityId)
-      if (!res.success) {
-        showError(res.error || "Gagal memperbarui penanda selesai aktivitas")
-        return
-      }
-      showSuccess(
-        completedAt
-          ? "Penanda selesai aktivitas dibatalkan"
-          : "Aktivitas ditandai selesai",
-      )
-      router.refresh()
+      await runUiAction(async () => {
+        const res = completedAt
+          ? await reopenLeadActivity(leadId, activityId)
+          : await completeLeadActivity(leadId, activityId)
+        if (!res.success) {
+          showError(res.error || "Gagal memperbarui penanda selesai aktivitas")
+          return
+        }
+        showSuccess(
+          completedAt
+            ? "Penanda selesai aktivitas dibatalkan"
+            : "Aktivitas ditandai selesai",
+        )
+        router.refresh()
+      }, "Gagal memperbarui penanda selesai aktivitas")
     })
   }
 

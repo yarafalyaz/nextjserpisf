@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { CheckCircle, XCircle, Clock } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { approveExpense, rejectExpense, markExpensePaid } from "@/actions/finance.actions"
 
@@ -41,25 +42,29 @@ export function ExpenseApprovalActions({
 
   function handleAction(action: "approve" | "reject") {
     startTransition(async () => {
-      const result = action === "approve" ? await approveExpense(id) : await rejectExpense(id)
-      if (result && result.success === false) {
-        showError(result.error || "Gagal memproses pengeluaran")
-        return
-      }
-      showSuccess(action === "approve" ? "Pengeluaran disetujui" : "Pengeluaran ditolak")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = action === "approve" ? await approveExpense(id) : await rejectExpense(id)
+        if (result && result.success === false) {
+          showError(result.error || "Gagal memproses pengeluaran")
+          return
+        }
+        showSuccess(action === "approve" ? "Pengeluaran disetujui" : "Pengeluaran ditolak")
+        router.refresh()
+      }, "Gagal memproses pengeluaran")
     })
   }
 
   function handleMarkPaid() {
     startTransition(async () => {
-      const result = await markExpensePaid(id)
-      if (result && result.success === false) {
-        showError(result.error || "Gagal menandai dibayar")
-        return
-      }
-      showSuccess("Pengeluaran ditandai dibayar")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await markExpensePaid(id)
+        if (result && result.success === false) {
+          showError(result.error || "Gagal menandai dibayar")
+          return
+        }
+        showSuccess("Pengeluaran ditandai dibayar")
+        router.refresh()
+      }, "Gagal menandai dibayar")
     })
   }
 

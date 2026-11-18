@@ -14,6 +14,7 @@ import {
   rejectProjectBudgetRevision,
 } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -139,12 +140,14 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
 
   function run(promise: Promise<{ success: boolean; error?: string }>, okMsg: string, after?: () => void) {
     startTransition(async () => {
-      const res = await promise
-      if (!res.success) { showError(res.error || "Gagal menyimpan RAB"); return }
-      showSuccess(okMsg)
-      after?.()
-      setConfirm(null)
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await promise
+        if (!res.success) { showError(res.error || "Gagal menyimpan RAB"); return }
+        showSuccess(okMsg)
+        after?.()
+        setConfirm(null)
+        router.refresh()
+      }, "Gagal menyimpan RAB")
     })
   }
 
@@ -184,6 +187,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
             selectable={false}
             enableColumnToggle={false}
             enableExport={false}
+            showPagination={false}
             pageSize={50}
           />
         </div>

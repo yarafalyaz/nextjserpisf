@@ -1092,26 +1092,26 @@ export async function approveExpense(expenseId: number) {
     // Workflow approval must be complete (no-op if no workflow configured).
     await assertApproved("Expense", expenseId);
 
-    // F-2026-10-25-017-S: gerbang khusus klaim reimbursement (non-klaim
-    // nol perubahan). Bukti BR-RB-04 + SoD BR-RB-07 + nominal <= bukti.
-    const isClaim = expense.isReimbursementClaim;
-    if (isClaim) {
-      await assertReimbursementApprovalGates(prisma, expense, Number(user.id));
-    }
-
     // R8-KEU-05: lock baris + cek status + sinkron kas kecil + flip status
     // dalam SATU tx. Jalur lama menyinkronkan kas kecil di tx terpisah lalu flip
     // di luar; kegagalan di antara keduanya meninggalkan kas berkurang sementara
     // expense tetap draft/rejected. Klaim reimbursement sudah memakai pola ini.
+    // H2: seluruh validasi klaim (termasuk isReimbursementClaim, bukti, SoD,
+    // nominal <= bukti, dan status pengaju) dieksekusi di dalam tx sesudah
+    // FOR UPDATE agar tidak kalah balap oleh updateExpense konkuren.
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${expenseId} FOR UPDATE`;
       const locked = await tx.expense.findUniqueOrThrow({ where: { id: expenseId } });
       if (locked.status !== "draft" && locked.status !== "approved") {
         throw new Error("Expense hanya bisa di-approve dari status draft");
       }
-      // Pengaju klaim dinilai ulang hidup/berhenti di titik akrual lahir —
-      // klaim karyawan yang sudah berhenti ditolak, bukan diakru.
-      if (locked.isReimbursementClaim) await assertClaimantPayable(tx, locked.employeeId);
+      const isClaim = Boolean(locked.isReimbursementClaim);
+      if (isClaim) {
+        await assertReimbursementApprovalGates(tx as never, locked, Number(user.id));
+        // Pengaju klaim dinilai ulang hidup/berhenti di titik akrual lahir —
+        // klaim karyawan yang sudah berhenti ditolak, bukan diakru.
+        await assertClaimantPayable(tx, locked.employeeId);
+      }
 
       // Pemisahan tugas non-klaim: klaim sudah dijaga SoD claimant vs
       // approver employee (BR-RB-07); non-klaim tanpa workflow hanya
@@ -1121,11 +1121,13 @@ export async function approveExpense(expenseId: number) {
         throw new Error("Pengeluaran tidak boleh disetujui oleh pembuatnya sendiri (pemisahan tugas) – minta penyetuju lain yang berizin approve_expenses.");
       }
 
-      await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx);
       if (isClaim) {
         // J-RB1: akrual gagal (setting 210209 kosong/periode tutup) = klaim
-        // tetap draft, bukan setengah berjurnal.
+        // tetap draft, bukan setengah berjurnal. Hak Kas Kecil tidak disentuh
+        // saat akrual (baru berkurang saat markExpensePaid).
         await onReimbursementClaimApproved(expenseId, Number(user.id), tx);
+      } else {
+        await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx);
       }
       const claim = await tx.expense.updateMany({
         where: { id: expenseId, status: { in: ["draft", "approved"] } },
@@ -1270,6 +1272,11 @@ export async function markExpensePaid(expenseId: number) {
           paymentAmount: Number(locked.amount),
         });
         if (!payGuard.ok) throw new Error(payGuard.error);
+        const payoutDate = new Date();
+        await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id), tx, {
+          allowReimbursementPayout: true,
+          payoutDate,
+        });
         await onReimbursementClaimPaid(expenseId, Number(user.id), tx);
       } else {
         await onExpenseApproved(expenseId, Number(user.id), tx);
@@ -3097,6 +3104,7 @@ export async function updateExpense(id: number, formData: FormData) {
           attachmentIds, referenceType: "expense", referenceId: updated.id, uploadedBy: Number(user.id),
         });
       }
+      await requestApprovalIfConfigured("Expense", updated.id, Number(user.id), tx);
       return updated;
     });
 

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 export interface TransferAccountOption {
   id: number
@@ -31,7 +31,7 @@ export function BankTransferForm({
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [fromAccountId, setFromAccountId] = useState("")
   const [toAccountId, setToAccountId] = useState("")
   const [amount, setAmount] = useState<number | null>(null)

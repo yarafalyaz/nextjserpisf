@@ -39,6 +39,15 @@ const txMock = {
   },
   employee: {
     findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+    findFirst: (...a: unknown[]) => employeeFindFirstMock(...a),
+  },
+  account: {
+    findFirst: (...a: unknown[]) => accountFindFirstMock(...a),
+    count: (...a: unknown[]) => accountCountMock(...a),
+    findUnique: (...a: unknown[]) => accountFindUniqueMock(...a),
+  },
+  transactionAttachment: {
+    count: (...a: unknown[]) => attachmentCountMock(...a),
   },
   journal: { findFirst: (...a: unknown[]) => journalFindFirstMock(...a) },
 }
@@ -160,7 +169,7 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
   it("klaim tanpa bukti ditolak, status tidak berubah", async () => {
     expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
     attachmentCountMock.mockResolvedValue(0)
-    expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM, receiptImage: null })
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM, receiptImage: null })
     const r = await approveExpense(42)
     expect(r.success).toBe(false)
     expect(accrualMock).not.toHaveBeenCalled()
@@ -175,11 +184,29 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
     expect(accrualMock).not.toHaveBeenCalled()
   })
 
-  it("klaim sah: J-RB1 diposting, bukan jurnal Expense existing", async () => {
+  it("klaim sah: J-RB1 diposting, bukan jurnal Expense existing, dan tidak menyentuh Kas Kecil saat approve", async () => {
     expenseFindUniqueOrThrowMock.mockResolvedValue({ ...CLAIM })
     const r = await approveExpense(42)
     expect(r.success).toBe(true)
     expect(accrualMock).toHaveBeenCalledWith(42, 7, expect.anything())
+    expect(syncPettyCashMock).not.toHaveBeenCalled()
+  })
+
+  it("H2: klaim berubah antara cek luar dan FOR UPDATE di dalam tx dievaluasi ulang dari row terkunci", async () => {
+    // Outer read looks like a non-claim / valid doc, while locked row inside tx
+    // was flipped by concurrent updateExpense to a reimbursement claim without proof.
+    expenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, isReimbursementClaim: false, receiptImage: null,
+    })
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, isReimbursementClaim: true, receiptImage: null,
+    })
+    attachmentCountMock.mockResolvedValue(0)
+    const r = await approveExpense(42)
+    expect(r.success).toBe(false)
+    expect(accrualMock).not.toHaveBeenCalled()
+    expect(syncPettyCashMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
   })
 
   it("FINHR-8: approve klaim dengan akun beban non-EXPENSE ditolak sebelum jurnal", async () => {
@@ -202,14 +229,17 @@ describe("approveExpense klaim (AC-RB-B3/B4, E-RB5-1)", () => {
   })
 
   it("Expense non-klaim: perilaku existing utuh (nol gerbang klaim)", async () => {
-    expenseFindUniqueOrThrowMock.mockResolvedValue({
+    const nonClaim = {
       ...CLAIM, isReimbursementClaim: false, employeeId: null,
       referenceNo: null, receiptImage: null,
-    })
+    }
+    expenseFindUniqueOrThrowMock.mockResolvedValue(nonClaim)
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue(nonClaim)
     attachmentCountMock.mockResolvedValue(0)
     const r = await approveExpense(42)
     expect(r.success).toBe(true)
     expect(accrualMock).not.toHaveBeenCalled()
+    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7, expect.anything())
     expect(txExpenseUpdateManyMock).toHaveBeenCalled()
   })
 })
@@ -356,12 +386,18 @@ describe("createReimbursementClaim self-scope (AC-RB-B1/B6)", () => {
 })
 
 describe("markExpensePaid klaim (E-RB5-2)", () => {
-  it("klaim dibayar lewat J-RB2, jurnal Expense existing TIDAK dipanggil", async () => {
+  it("klaim dibayar lewat J-RB2 + sinkron Kas Kecil payout, jurnal Expense existing TIDAK dipanggil", async () => {
     txExpenseFindUniqueOrThrowMock.mockResolvedValue({
       ...CLAIM, status: "approved", paidFromAccountId: 100,
     })
     const r = await markExpensePaid(42)
     expect(r.success).toBe(true)
+    expect(syncPettyCashMock).toHaveBeenCalledWith(
+      42,
+      7,
+      expect.anything(),
+      expect.objectContaining({ allowReimbursementPayout: true, payoutDate: expect.any(Date) }),
+    )
     expect(paidMock).toHaveBeenCalledWith(42, 7, expect.anything())
     expect(expenseJournalMock).not.toHaveBeenCalled()
   })

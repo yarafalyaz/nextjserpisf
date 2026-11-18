@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
 import { useCreditGateBlocked } from "@/components/forms/credit-override-panel"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 const salesOrderSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -52,7 +52,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
       // kalau tidak tanggal pengiriman terhapus setiap kali pesanan disimpan.
       customerId: order?.customerId ?? defaultCustomerId,
       quotationId: order?.quotationId ?? quotationId,
-      date: order?.date ?? toLocalDateOnly(new Date()),
+      date: order?.date ?? wibDateOnly(new Date()),
       deliveryDate: order?.deliveryDate ?? "",
       notes: order?.notes ?? "",
     },

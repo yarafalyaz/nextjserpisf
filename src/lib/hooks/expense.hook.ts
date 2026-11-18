@@ -19,6 +19,7 @@ export async function onExpenseApprovedSyncPettyCash(
   expenseId: number,
   approvedByUserId?: number,
   txClient?: unknown,
+  opts?: { allowReimbursementPayout?: boolean; payoutDate?: Date },
 ): Promise<void> {
   const run = async (tx: any) => {
     // Kunci baris expense lebih dulu: dua approval konkuren untuk expense yang
@@ -30,6 +31,12 @@ export async function onExpenseApprovedSyncPettyCash(
     const expense = await tx.expense.findUniqueOrThrow({
       where: { id: expenseId },
     });
+
+    // H3: reimbursement claims accrue to Hutang Karyawan on approval and only
+    // sync Petty Cash on actual payout inside markExpensePaid.
+    if (expense.isReimbursementClaim && !opts?.allowReimbursementPayout) {
+      return;
+    }
 
     // R8-KEU-04/05: sync hanya boleh menulis untuk expense yang masih hidup di
     // status pra/sesudah-approve. Bila penghapusan atau reject menang lebih
@@ -86,7 +93,8 @@ export async function onExpenseApprovedSyncPettyCash(
 
     // Period gate sebelum create: expense bertanggal periode tertutup ditolak
     // di dalam tx yang sama (lock expense sudah dipegang).
-    await assertPeriodOpen(expense.date, tx);
+    const effectiveDate = opts?.payoutDate ?? expense.date ?? new Date();
+    await assertPeriodOpen(effectiveDate, tx);
 
     // Idempotency: check if PettyCash record already exists for this expense
     const existing = await tx.pettyCash.findFirst({
@@ -124,8 +132,8 @@ export async function onExpenseApprovedSyncPettyCash(
         amount: expense.amount,
         description: `Expense: ${expense.description ?? expense.documentNo}`,
         accountId: expense.paidFromAccountId!,
-        date: expense.date ?? new Date(),
-        transactionDate: expense.date ?? new Date(),
+        date: effectiveDate,
+        transactionDate: effectiveDate,
         referenceNo: expense.documentNo,
         balanceBefore: 0,
         balanceAfter: 0,

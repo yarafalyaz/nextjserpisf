@@ -20,6 +20,7 @@ import {
 } from "@/lib/services/recurring.service"
 import { assertAccountsExist } from "@/lib/hooks/accounting.hook"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service"
 import { isRecurrenceFrequency, isWithinSchedule, nextRunAfter } from "@/lib/reports/recurring-schedule"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 
@@ -257,6 +258,7 @@ export async function runRecurringNow(id: number) {
               },
             },
           })
+          await requestApprovalIfConfigured("Journal", journal.id, Number(user.id), tx)
           summary = `Jurnal ${journal.journalNumber}`
         }
       } else {
@@ -266,7 +268,7 @@ export async function runRecurringNow(id: number) {
         await assertPeriodOpen(runDate, tx)
 
         const documentNo = await generateDocumentNumber("EXP")
-        await tx.expense.create({
+        const expense = await tx.expense.create({
           data: {
             documentNo,
             slug: await nextSlug("expense", documentNo),
@@ -280,6 +282,7 @@ export async function runRecurringNow(id: number) {
             createdBy: Number(user.id),
           },
         })
+        await requestApprovalIfConfigured("Expense", expense.id, Number(user.id), tx)
         summary = `Beban ${documentNo}`
       }
 

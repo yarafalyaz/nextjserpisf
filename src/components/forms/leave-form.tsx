@@ -16,6 +16,7 @@ import { LEAVE_TYPE_LABELS } from "@/lib/utils/status-labels"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 
 interface LeaveFormProps {
@@ -241,10 +242,10 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
             <Textarea id="reason" name="reason" className="w-full" rows={3} placeholder="Alasan cuti..." defaultValue={leave?.reason ?? ""} />
           </FormGroup>
         </FormGrid>
-        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="button" onPress={() => router.back()} >Batal</Button>
-          <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : leave?.id ? "Perbarui" : "Simpan"}</Button>
-        </div>
+        <FormActions>
+          <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+          <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">{isPending ? "Menyimpan..." : leave?.id ? "Perbarui" : "Simpan"}</Button>
+        </FormActions>
       </form>
   )
 }

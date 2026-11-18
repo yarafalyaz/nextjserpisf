@@ -6,7 +6,7 @@ import { SalesReturnForm } from "@/components/forms/sales-return-form"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { buildReturnPrefill, type ReturnPrefill } from "../../_lib/return-prefill"
 import { RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
 import {
@@ -130,7 +130,7 @@ export default async function CreateSalesReturnPage({
                 id: 0,
                 customerId: prefill.customerId,
                 salesInvoiceId: prefill.salesInvoiceId,
-                date: toLocalDateOnly(new Date()),
+                date: wibDateOnly(new Date()),
                 items: prefill.items,
               }
             : undefined

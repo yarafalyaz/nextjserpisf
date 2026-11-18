@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useTransition } from "react"
 import { addTicketComment } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -25,17 +26,19 @@ export function TicketCommentForm({ ticketId, canCreate = true }: { ticketId: nu
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      fd.set("idempotencyKey", idempotencyKeyRef.current!)
-      const res = await addTicketComment(ticketId, fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menambahkan komentar")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Komentar ditambahkan")
-      form.reset()
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        fd.set("idempotencyKey", idempotencyKeyRef.current!)
+        const res = await addTicketComment(ticketId, fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menambahkan komentar")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Komentar ditambahkan")
+        form.reset()
+        router.refresh()
+      }, "Gagal menambahkan komentar")
     })
   }
 

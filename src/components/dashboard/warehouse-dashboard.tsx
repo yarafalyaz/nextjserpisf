@@ -251,7 +251,7 @@ export default async function WarehouseDashboard({
                 </CardTitle>
                 <CardDescription>Item dengan stok di bawah minimum</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/master/barang/stokmenipis">
                       Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
@@ -293,7 +293,7 @@ export default async function WarehouseDashboard({
                 </CardTitle>
                 <CardDescription>8 pergerakan stok terakhir</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/inventaris/mutasi-stok">
                       Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
@@ -352,7 +352,7 @@ export default async function WarehouseDashboard({
                       <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
                     </div>
                   </div>
-                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
+                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

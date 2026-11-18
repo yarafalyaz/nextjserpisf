@@ -9,8 +9,9 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { Progress } from "@/components/ui/shadcn/progress"
 import { EmptyState } from "@/components/ui/empty-state"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { formatDate } from "@/lib/utils/format"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { computeWeightedStagesProgress } from "@/lib/utils/project-stage-progress"
 import { cn } from "@/lib/utils"
 import { initializeProjectStages, updateProjectStagePlan, updateProjectStageProgress } from "@/actions/project.actions"
@@ -101,8 +102,8 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
   const openPlanDialog = (stage: Stage) => {
     setPlanStage(stage)
     setPlanWeight(stage.weightPct != null ? String(Number(stage.weightPct)) : "")
-    setPlanStart(stage.plannedStartDate ? toLocalDateOnly(new Date(stage.plannedStartDate)) : "")
-    setPlanEnd(stage.plannedEndDate ? toLocalDateOnly(new Date(stage.plannedEndDate)) : "")
+    setPlanStart(stage.plannedStartDate ? wibDateOnly(new Date(stage.plannedStartDate)) : "")
+    setPlanEnd(stage.plannedEndDate ? wibDateOnly(new Date(stage.plannedEndDate)) : "")
     setPlanDialogOpen(true)
   }
 
@@ -110,18 +111,20 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
     if (!planStage) return
     const parsedWeight = planWeight.trim() === "" ? null : Number(planWeight)
     startTransition(async () => {
-      const res = await updateProjectStagePlan(projectId, planStage.id, {
-        weightPct: parsedWeight,
-        plannedStartDate: planStart || null,
-        plannedEndDate: planEnd || null,
-      })
-      if (!res.success) {
-        showError(res.error ?? "Gagal menyimpan rencana tahap.")
-        return
-      }
-      showSuccess("Rencana jadwal & bobot tahap diperbarui.")
-      setPlanDialogOpen(false)
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await updateProjectStagePlan(projectId, planStage.id, {
+          weightPct: parsedWeight,
+          plannedStartDate: planStart || null,
+          plannedEndDate: planEnd || null,
+        })
+        if (!res.success) {
+          showError(res.error ?? "Gagal menyimpan rencana tahap.")
+          return
+        }
+        showSuccess("Rencana jadwal & bobot tahap diperbarui.")
+        setPlanDialogOpen(false)
+        router.refresh()
+      }, "Gagal menyimpan rencana tahap.")
     })
   }
 
@@ -227,13 +230,15 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                 isDisabled={isPending}
                 onClick={() => {
                   startTransition(async () => {
-                    const res = await initializeProjectStages(projectId)
-                    if (!res.success) {
-                      showError(("error" in res ? res.error : undefined) ?? "Gagal menginisialisasi tahapan.")
-                      return
-                    }
-                    showSuccess("Tahapan default proyek berhasil dibuat.")
-                    router.refresh()
+                    await runUiAction(async () => {
+                      const res = await initializeProjectStages(projectId)
+                      if (!res.success) {
+                        showError(("error" in res ? res.error : undefined) ?? "Gagal menginisialisasi tahapan.")
+                        return
+                      }
+                      showSuccess("Tahapan default proyek berhasil dibuat.")
+                      router.refresh()
+                    }, "Gagal menginisialisasi tahapan.")
                   })
                 }}
               >

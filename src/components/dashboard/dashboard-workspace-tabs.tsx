@@ -68,7 +68,7 @@ export function DashboardWorkspaceTabs({
                 aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors duration-150",
+                  "flex min-h-11 md:min-h-10 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors duration-150",
                   isActive
                     ? "bg-card text-foreground shadow-2xs"
                     : "text-muted-foreground hover:text-foreground",

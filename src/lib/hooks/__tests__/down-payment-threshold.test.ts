@@ -346,4 +346,34 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("fail-closed 50%"))
     errorSpy.mockRestore()
   })
+
+  it("C2: DP terutang PPN saat konversi ambang batas TIDAK membuat jurnal alokasi SalesPayment prematur", async () => {
+    const dp = {
+      ...buildDp({ id: 14, amount: 600, status: "draft", docNo: "DP-14" }),
+      vatTransactionCode: "04",
+      vatRate: 12,
+      vatDpp: 535.71,
+      vatAmount: 64.29,
+      vatTaxPeriod: "2026-10",
+    }
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([
+      {
+        documentNo: "DP-14",
+        amount: 600,
+        paymentDate: new Date("2026-10-01T00:00:00Z"),
+        vatTransactionCode: "04",
+        vatRate: 12,
+        vatDpp: 535.71,
+        vatAmount: 64.29,
+        vatTaxPeriod: "2026-10",
+      },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(14, 1)
+
+    expect(mocks.salesPaymentCreate).toHaveBeenCalled()
+    expect(tx.journal.create).not.toHaveBeenCalled()
+  })
 })

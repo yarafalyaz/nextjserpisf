@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { createQcChecklist, updateQcChecklist } from "@/actions/qc.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
@@ -18,6 +19,7 @@ import {
 import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface ItemRow {
   itemName: string
@@ -208,16 +210,18 @@ export function QcChecklistForm({
     })
 
     startTransition(async () => {
-      const result = checklist
-        ? await updateQcChecklist(checklist.id, formData)
-        : await createQcChecklist(formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess(checklist ? "Checklist diperbarui" : "Checklist dibuat")
-      router.push("/produksi/qc/checklist")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = checklist
+          ? await updateQcChecklist(checklist.id, formData)
+          : await createQcChecklist(formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess(checklist ? "Checklist diperbarui" : "Checklist dibuat")
+        router.push("/produksi/qc/checklist")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -278,16 +282,17 @@ export function QcChecklistForm({
           selectable={false}
           enableColumnToggle={false}
           enableExport={false}
+          showPagination={false}
           pageSize={50}
         />
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" onPress={() => router.back()} type="button">Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-qc-checklist">
+      <FormActions>
+        <Button className="w-full md:w-auto" onPress={() => router.back()} type="button">Batal</Button>
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-qc-checklist">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

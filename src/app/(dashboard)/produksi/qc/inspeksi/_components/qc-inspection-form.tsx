@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useRef, useState, useTransition, useMemo } from "react"
 import { createQcInspection } from "@/actions/qc.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -18,6 +19,7 @@ import {
 import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 type ResultValue = "pass" | "fail" | "na"
 
@@ -212,23 +214,25 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
     })
 
     startTransition(async () => {
-      const result = await createQcInspection(formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menyimpan inspeksi")
-        return
-      }
-      const ncrCount = result?.raisedNcrIds?.length ?? 0
-      if (result?.status === "failed") {
-        showSuccess(
-          ncrCount > 0
-            ? `Inspeksi dicatat: GAGAL, ${ncrCount} NCR dibuat otomatis`
-            : "Inspeksi dicatat: GAGAL",
-        )
-      } else {
-        showSuccess("Inspeksi dicatat: LULUS")
-      }
-      router.push("/produksi/qc/inspeksi")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createQcInspection(formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyimpan inspeksi")
+          return
+        }
+        const ncrCount = result?.raisedNcrIds?.length ?? 0
+        if (result?.status === "failed") {
+          showSuccess(
+            ncrCount > 0
+              ? `Inspeksi dicatat: GAGAL, ${ncrCount} NCR dibuat otomatis`
+              : "Inspeksi dicatat: GAGAL",
+          )
+        } else {
+          showSuccess("Inspeksi dicatat: LULUS")
+        }
+        router.push("/produksi/qc/inspeksi")
+        router.refresh()
+      }, "Gagal menyimpan inspeksi")
     })
   }
 
@@ -316,6 +320,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
             selectable={false}
             enableColumnToggle={false}
             enableExport={false}
+            showPagination={false}
             pageSize={50}
           />
           {!allRequiredAnswered && (
@@ -326,9 +331,9 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
         </div>
       )}
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" onPress={() => router.back()} type="button">Batal</Button>
-        <Button className="w-full sm:w-auto"
+      <FormActions>
+        <Button className="w-full md:w-auto" onPress={() => router.back()} type="button">Batal</Button>
+        <Button className="w-full md:w-auto"
           type="submit"
           variant="primary"
           isDisabled={isPending || !selectedChecklist}
@@ -336,7 +341,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
         >
           {isPending ? "Menyimpan..." : "Simpan Inspeksi"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

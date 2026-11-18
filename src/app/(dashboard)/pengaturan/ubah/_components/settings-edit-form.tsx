@@ -18,6 +18,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { resolveAllAccountMappings } from "@/lib/utils/account-automap"
 import { ACCOUNT_MAPPING_CATALOG } from "@/lib/utils/account-mapping-catalog"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { SafeImage } from "@/components/ui/safe-image"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 
@@ -1025,11 +1026,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="overtimeMultiplier">Pengali Lembur</Label>
-                <Input id="overtimeMultiplier" name="overtimeMultiplier" type="number" step="any" defaultValue={String(settings.overtimeMultiplier)} className="w-full" />
+                <Input id="overtimeMultiplier" name="overtimeMultiplier" type="number" min={0} step="any" defaultValue={String(settings.overtimeMultiplier)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="overtimeCoefficient">Koefisien Lembur</Label>
-                <Input id="overtimeCoefficient" name="overtimeCoefficient" type="number" step="any" defaultValue={String(settings.overtimeCoefficient)} className="w-full" />
+                <Input id="overtimeCoefficient" name="overtimeCoefficient" type="number" min={0} step="any" defaultValue={String(settings.overtimeCoefficient)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="overtimeMealBreakStart">Jam Mulai Istirahat Lembur</Label>
@@ -1053,15 +1054,15 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="attendanceRadiusKm">Radius Kehadiran (KM)</Label>
-                <Input id="attendanceRadiusKm" name="attendanceRadiusKm" type="number" step="any" defaultValue={String(settings.attendanceRadiusKm)} className="w-full" />
+                <Input id="attendanceRadiusKm" name="attendanceRadiusKm" type="number" min={0} step="any" defaultValue={String(settings.attendanceRadiusKm)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Denda Keterlambatan per Menit</Label>
-                <CurrencyInput name="latePenaltyPerMinute" defaultValue={settings.latePenaltyPerMinute} prefix="Rp" />
+                <CurrencyInput name="latePenaltyPerMinute" min={0} defaultValue={settings.latePenaltyPerMinute} prefix="Rp" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="maxLatePenaltyMinutes">Maks Menit Denda Terlambat</Label>
-                <Input id="maxLatePenaltyMinutes" name="maxLatePenaltyMinutes" type="number" defaultValue={String(settings.maxLatePenaltyMinutes)} className="w-full" />
+                <Input id="maxLatePenaltyMinutes" name="maxLatePenaltyMinutes" type="number" min={0} defaultValue={String(settings.maxLatePenaltyMinutes)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-2">
                 <Label htmlFor="payrollCutoffDay">Tanggal Cut-off Penggajian (Tgl akhir siklus per bulan)</Label>
@@ -1215,22 +1216,23 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       <input type="hidden" name="_redirectTo" value={redirectTo || "/pengaturan"} />
 
       {/* Submit */}
-      <div className="flex items-center gap-3 mt-6">
-        <Button
-          type="submit"
-          isDisabled={isPending}
-          className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all"
-        >
-          {isPending ? "Menyimpan..." : "Simpan Pengaturan"}
-        </Button>
+      <FormActions>
         <Button
           type="button"
           onPress={() => router.push(redirectTo || "/pengaturan")}
-          className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
+          className="w-full md:w-auto"
         >
           Batal
         </Button>
-      </div>
+        <Button
+          type="submit"
+          variant="primary"
+          isDisabled={isPending}
+          className="w-full md:w-auto"
+        >
+          {isPending ? "Menyimpan..." : "Simpan Pengaturan"}
+        </Button>
+      </FormActions>
     </form>
   )
 }

@@ -982,14 +982,23 @@ describe("Expense Actions", () => {
       }),
     )
   })
-  it("updateExpense succeeds", async () => {
+  it("updateExpense succeeds and calls requestApprovalIfConfigured inside tx (H1)", async () => {
+    const wf = await import("@/lib/services/approval-workflow.service") as any
+    wf.requestApprovalIfConfigured.mockClear()
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.expense.update.mockResolvedValue({ id: 1 })
     const res = await (actions as any).updateExpense(1, fdMap({
       accountId: 1,
       amount: 1200,
       date: "2026-06-13"
     }))
     expect(res?.success).toBe(true)
+    expect(wf.requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "Expense",
+      1,
+      expect.anything(),
+      expect.anything(),
+    )
   })
   it("createExpense menolak akun nonaktif/terhapus sebelum tulis (putaran 25)", async () => {
     mocks.prismaMock.account.findFirst.mockResolvedValue(null)

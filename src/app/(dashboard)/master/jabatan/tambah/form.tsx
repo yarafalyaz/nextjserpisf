@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface PositionCreateFormProps {
   departments: { id: number; name: string }[]
@@ -32,16 +34,18 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
       formData.set("idempotencyKey", idempotencyKey)
     }
     startTransition(async () => {
-      const result = isEdit
-        ? await updatePosition(position!.id, formData)
-        : await createPosition(formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess(isEdit ? "Jabatan berhasil diperbarui" : "Jabatan berhasil ditambahkan")
-      router.push("/master/jabatan")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = isEdit
+          ? await updatePosition(position!.id, formData)
+          : await createPosition(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess(isEdit ? "Jabatan berhasil diperbarui" : "Jabatan berhasil ditambahkan")
+        router.push("/master/jabatan")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -75,12 +79,12 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-position">
+      <FormActions>
+        <Button className="w-full md:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-position">
           {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

@@ -326,4 +326,51 @@ describe("createQuotation gerbang hidup dalam tx (putaran 70)", () => {
     expect(String((result as { error?: string }).error ?? "")).toMatch(/Kendaraan pelanggan tidak aktif/)
     expect(quotationCreateMock).not.toHaveBeenCalled()
   })
+
+  it("regresi M5: createQuotation menolak qty/unitPrice negatif dan men-clamp diskon fixed negatif", async () => {
+    const negQty = await createQuotation(fdData({
+      customerId: 10,
+      date: "2026-06-09",
+      sections: [{ name: "Parts", items: [{ itemId: 1, qty: -5, unitPrice: 100_000 }] }],
+    }))
+    expect(negQty.success).toBe(false)
+    expect(quotationCreateMock).not.toHaveBeenCalled()
+
+    const negPrice = await createQuotation(fdData({
+      customerId: 10,
+      date: "2026-06-09",
+      sections: [{ name: "Parts", items: [{ itemId: 1, qty: 1, unitPrice: -10_000 }] }],
+    }))
+    expect(negPrice.success).toBe(false)
+    expect(quotationCreateMock).not.toHaveBeenCalled()
+
+    const negFixedDisc = await createQuotation(fdData({
+      customerId: 10,
+      date: "2026-06-09",
+      sections: [{
+        name: "Parts",
+        items: [{ itemId: 1, qty: 2, unitPrice: 100_000, discountType: "fixed", discount: -50_000 }],
+      }],
+    }))
+    expect(negFixedDisc.success).toBe(true)
+    expect(quotationCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subtotal: 200_000,
+          grandTotal: 200_000,
+          sections: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                items: expect.objectContaining({
+                  create: expect.arrayContaining([
+                    expect.objectContaining({ qty: 2, unitPrice: 100_000, discount: 0, total: 200_000 }),
+                  ]),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+  })
 })

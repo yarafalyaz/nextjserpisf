@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPaymentTerm } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 
 export default function CreatePaymentTermPage() {
@@ -18,14 +20,16 @@ export default function CreatePaymentTermPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const result = await createPaymentTerm(formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess("Termin pembayaran berhasil ditambahkan")
-      router.push("/master/syarat-pembayaran")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createPaymentTerm(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Termin pembayaran berhasil ditambahkan")
+        router.push("/master/syarat-pembayaran")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -58,12 +62,12 @@ export default function CreatePaymentTermPage() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-          <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-          <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-payment-term">
+        <FormActions>
+          <Button className="w-full md:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
+          <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-payment-term">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   )

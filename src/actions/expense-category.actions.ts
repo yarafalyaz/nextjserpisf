@@ -8,6 +8,17 @@ import { nextSlugWithClient } from "@/lib/utils/slug-db"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { expenseCategorySchema } from "@/lib/validations/finance.schemas"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+
+function handleCategoryActionError(e: unknown, fallback: string, checkUnique = false) {
+  if (isNextRedirectError(e)) throw e
+  const code = (e as { code?: unknown } | null)?.code
+  const rawMsg = e instanceof Error ? e.message : ""
+  if (checkUnique && (code === "P2002" || rawMsg.includes("Unique constraint"))) {
+    return { success: false as const, error: "Nama kategori sudah ada" }
+  }
+  return { success: false as const, error: getErrorMessage(e, fallback) }
+}
 
 export async function createExpenseCategory(formData: FormData) {
   const user = await requirePermission("manage_expense_categories")
@@ -38,9 +49,7 @@ export async function createExpenseCategory(formData: FormData) {
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Gagal menyimpan"
-    if (msg.includes("Unique constraint")) return { success: false, error: "Nama kategori sudah ada" }
-    return { success: false, error: msg }
+    return handleCategoryActionError(e, "Gagal menyimpan", true)
   }
 }
 
@@ -73,9 +82,7 @@ export async function updateExpenseCategory(id: number, formData: FormData) {
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Gagal menyimpan"
-    if (msg.includes("Unique constraint")) return { success: false, error: "Nama kategori sudah ada" }
-    return { success: false, error: msg }
+    return handleCategoryActionError(e, "Gagal menyimpan", true)
   }
 }
 
@@ -118,6 +125,6 @@ export async function deleteExpenseCategory(id: number) {
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {
-    return { success: false, error: e instanceof Error ? e.message : "Gagal menghapus" }
+    return handleCategoryActionError(e, "Gagal menghapus")
   }
 }

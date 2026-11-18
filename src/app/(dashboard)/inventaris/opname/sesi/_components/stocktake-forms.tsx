@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useMemo, useRef, useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
@@ -48,17 +49,19 @@ export function StocktakeSessionForm({
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const data = new FormData(form)
-      data.set("idempotencyKey", idempotencyKeyRef.current!)
-      const res = await createStocktakeSession(data)
-      if (!res.success) {
-        showError(res.error || "Gagal membuat sesi")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Sesi dibuat")
-      form.reset()
-      router.refresh()
+      await runUiAction(async () => {
+        const data = new FormData(form)
+        data.set("idempotencyKey", idempotencyKeyRef.current!)
+        const res = await createStocktakeSession(data)
+        if (!res.success) {
+          showError(res.error || "Gagal membuat sesi")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Sesi dibuat")
+        form.reset()
+        router.refresh()
+      }, "Gagal membuat sesi")
     })
   }
 
@@ -113,11 +116,11 @@ export function StocktakeSessionForm({
           id="stkNotes"
           name="notes"
           placeholder="Misal: Opname Bulanan Q4 / Siklus Khusus"
-          className="h-9 text-xs"
+          className="h-11 md:h-9 text-xs"
         />
       </div>
 
-      <Button type="submit" isDisabled={isPending} className="h-9 text-xs px-4">
+      <Button type="submit" isDisabled={isPending} className="min-h-11 md:min-h-9 md:h-9 text-xs px-4">
         {isPending ? "Menyimpan..." : "Buat Sesi"}
       </Button>
     </form>
@@ -131,13 +134,15 @@ export function StocktakeActions({ id, status, canCreate, canEdit }: { id: numbe
 
   function run(label: string, fn: () => Promise<{ success: boolean; error?: string }>) {
     startTransition(async () => {
-      const res = await fn()
-      if (!res.success) {
-        showError(res.error || `Gagal: ${label}`)
-        return
-      }
-      showSuccess(label)
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await fn()
+        if (!res.success) {
+          showError(res.error || `Gagal: ${label}`)
+          return
+        }
+        showSuccess(label)
+        router.refresh()
+      }, `Gagal: ${label}`)
     })
   }
 
@@ -335,16 +340,18 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
       serialNumbers: lots[l.id]?.serial !== undefined ? splitList(lots[l.id].serial) : l.serialNumbers,
     }))
     startTransition(async () => {
-      const fd = new FormData()
-      fd.set("counts", JSON.stringify(payload))
-      const res = await saveStocktakeCounts(sessionId, fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan hitungan")
-        return
-      }
-      showSuccess("Hitungan disimpan")
-      setCounts({})
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData()
+        fd.set("counts", JSON.stringify(payload))
+        const res = await saveStocktakeCounts(sessionId, fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan hitungan")
+          return
+        }
+        showSuccess("Hitungan disimpan")
+        setCounts({})
+        router.refresh()
+      }, "Gagal menyimpan hitungan")
     })
   }
 
@@ -361,6 +368,7 @@ export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: 
         selectable={false}
         enableColumnToggle={false}
         enableExport={false}
+        showPagination={false}
         pageSize={50}
       />
       {canCreate && (

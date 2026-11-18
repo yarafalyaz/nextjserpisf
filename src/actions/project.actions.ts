@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
 import { assertWorkOrderQcCleared } from "@/lib/services/qc.service"
 import { releaseActiveReservationsForWorkOrderTx } from "@/lib/services/stock-reservation.service"
+import { applyWorkOrderCompletionSideEffectsTx } from "@/lib/services/work-order-completion.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { nextSlugWithClient } from "@/lib/utils/slug-db"
@@ -570,7 +571,7 @@ export async function updateProjectStageProgress(
   // Prisma cannot nest $transaction callbacks — calling the public
   // syncProjectStatus inside this tx would open a separate transaction
   // that commits independently, breaking the atomicity we are after.
-  await prisma.$transaction(async (tx) => {
+  const woCompleted = await prisma.$transaction(async (tx) => {
     // Serialize stage transitions per project: lock project row, then target
     // stage row, then re-read stage + previous-stage guard inside tx. Prior
     // code read both outside tx, so two concurrent transitions could both
@@ -660,11 +661,16 @@ export async function updateProjectStageProgress(
     })
 
     // Auto-update project + WO status (in same tx via the TxClient variant)
-    await syncProjectStatusTx(projectId, tx)
+    return syncProjectStatusTx(projectId, tx, Number(user.id))
   })
 
   await logActivity("update", "ProjectStage", stageId, "Memperbarui progres tahapan proyek")
   revalidatePath("/proyek")
+  if (woCompleted) {
+    revalidatePath("/produksi/perintah-kerja")
+    revalidatePath("/inventaris/mutasi-stok")
+    revalidatePath("/pengiriman")
+  }
   return { success: true }
 
   } catch (e: unknown) {
@@ -680,7 +686,7 @@ export async function updateProjectStageProgress(
  * Parity with Laravel: ProjectStageProgressController@updateProjectProgress
  */
 export async function syncProjectStatus(projectId: number) {
-  await requirePermission("edit_projects")
+  const user = await requirePermission("edit_projects")
   // ATOMICITY: a sync can touch up to 5 tables (project + workOrder +
   // workOrderItem + (in the "all completed" branch) the materialIssue lookup
   // and the WO completion flip). Previously these were sequential non-
@@ -692,7 +698,7 @@ export async function syncProjectStatus(projectId: number) {
   // The materialIssue lookup inside the tx is a SELECT — safe to run inside
   // the same tx body (no state to roll back), and the result is only used to
   // gate the WO update; the in-tx writes are still atomic with each other.
-  await prisma.$transaction(async (tx) => {
+  const woCompleted = await prisma.$transaction(async (tx) => {
     // Kunci baris proyek SEBELUM bacaan pertama tx: tanpa kunci, snapshot
     // stage basi dari sync ini bisa menimpa proyek yang baru saja completed
     // oleh updateProjectStageProgress konkuren kembali ke in_progress
@@ -702,8 +708,14 @@ export async function syncProjectStatus(projectId: number) {
       SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
     `
     if (projectRows.length === 0) throw new Error("Proyek tidak ditemukan")
-    await syncProjectStatusTx(projectId, tx)
+    return syncProjectStatusTx(projectId, tx, Number(user.id))
   })
+  if (woCompleted) {
+    revalidatePath("/proyek")
+    revalidatePath("/produksi/perintah-kerja")
+    revalidatePath("/inventaris/mutasi-stok")
+    revalidatePath("/pengiriman")
+  }
 }
 
 /**
@@ -713,7 +725,7 @@ export async function syncProjectStatus(projectId: number) {
  * (Prisma cannot nest $transaction callbacks — the inner one would commit
  * independently and break atomicity).
  */
-async function syncProjectStatusTx(projectId: number, tx: TxClient) {
+async function syncProjectStatusTx(projectId: number, tx: TxClient, userId?: number | null): Promise<boolean> {
   const project = await tx.project.findUniqueOrThrow({
     where: { id: projectId },
   })
@@ -722,7 +734,7 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
     where: { projectId },
     orderBy: { sortOrder: "asc" },
   })
-  if (stages.length === 0) return
+  if (stages.length === 0) return false
 
   const total = stages.length
   // Fix: a `skipped` stage is a terminal "done" state (mirrors the previous-stage
@@ -777,10 +789,8 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
               data: { status: "completed", endDate: new Date() },
             })
             if (claim.count === 1) {
-              await tx.workOrderItem.updateMany({
-                where: { workOrderId: project.workOrderId },
-                data: { status: "completed" },
-              })
+              await applyWorkOrderCompletionSideEffectsTx(tx, project.workOrderId, userId)
+              return true
             }
           }
         }
@@ -857,6 +867,7 @@ async function syncProjectStatusTx(projectId: number, tx: TxClient) {
       }
     }
   }
+  return false
 }
 
 /**

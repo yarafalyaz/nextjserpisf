@@ -225,7 +225,7 @@ export function MobileBottomNav({ permissions = [], roles = [] }: MobileBottomNa
                 <button
                   type="button"
                   onClick={() => setSelectedModule(null)}
-                  className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95"
+                  className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95"
                 >
                   <ArrowLeft className="size-3.5" aria-hidden="true" />
                   Semua Modul

@@ -586,6 +586,61 @@ describe("F-027 tarikan generate", () => {
     expect(requestApprovalMock).toHaveBeenCalledTimes(1)
     expect(requestApprovalMock).toHaveBeenCalledWith("Payroll", 55, 1, expect.anything())
   })
+
+  it("regresi H6: generateBulkPayroll tetap memakai assignment, ruleset, dan TER yang effectiveTo persis di endDate (UTC midnight)", async () => {
+    const expiringEnd = new Date("2025-02-28T00:00:00.000Z")
+    prismaMock.employee.findMany
+      .mockResolvedValueOnce([{ id: 7 }])
+      .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
+    prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
+    prismaMock.payroll.findUnique.mockResolvedValue({ status: "draft", componentLines: [] })
+    // Filter assignment, statutory rule, dan TER meniru operator >= / <= DB
+    // terhadap effectiveTo UTC midnight. Sebelum perbaikan H6, rangeEnd = 23:59:59.999 WIB
+    // (16:59:59.999Z) membuat effectiveTo >= asOf bernilai FALSE.
+    prismaMock.employeePayrollComponent.findMany.mockImplementation(async (args: any) => {
+      const targetEnd: Date = args?.where?.effectiveFrom?.lte
+      const all: Array<Omit<ReturnType<typeof assignment>, "effectiveTo"> & { effectiveTo: Date | null }> = [
+        assignment(21, 3, "Transport", 500000, {
+          effectiveFrom: new Date("2025-02-01T00:00:00.000Z"),
+          effectiveTo: expiringEnd,
+        }),
+      ]
+      return all.filter((r) => r.effectiveFrom <= targetEnd && (r.effectiveTo == null || r.effectiveTo >= targetEnd))
+    })
+    prismaMock.payrollStatutoryRule.findMany.mockImplementation(async (args: any) => {
+      const targetEnd: Date = args?.where?.effectiveFrom?.lte
+      if (expiringEnd < targetEnd) return []
+      return mocks.rules.map((r) => ({ ...r, effectiveFrom: new Date("2025-02-01T00:00:00.000Z"), effectiveTo: expiringEnd }))
+    })
+    prismaMock.payrollTerBracket.findMany.mockImplementation(async (args: any) => {
+      const targetEnd: Date = args?.where?.effectiveFrom?.lte
+      if (expiringEnd < targetEnd) return []
+      return [
+        {
+          category: args?.where?.category ?? "A",
+          lowerBound: 0,
+          upperBound: null,
+          rateMilliPercent: 0,
+          effectiveFrom: new Date("2025-02-01T00:00:00.000Z"),
+          effectiveTo: expiringEnd,
+          source: "PP 58/2023",
+        },
+      ]
+    })
+
+    const res = await actions.generateBulkPayroll("2025-02", "2025-02-01", "2025-02-28")
+    expect(res.success).toBe(true)
+    const row = prismaMock.payroll.createMany.mock.calls.at(-1)[0].data[0]
+    expect(row.allowances).toBe(500000)
+    expect(row.grossSalary).toBe(5500000)
+    expect(row.endDate.toISOString()).toBe("2025-02-28T00:00:00.000Z")
+  })
 })
 
 

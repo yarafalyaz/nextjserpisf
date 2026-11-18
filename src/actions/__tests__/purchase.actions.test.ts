@@ -4412,6 +4412,53 @@ describe("BUGHUNT round3 #6-7 kunci baris + klaim status pembelian", () => {
     })
   })
 
+  it("C3: voidVendorBill ikut membalik jurnal WithholdingCertificate yang sudah revoked agar PPh/AP tidak miring", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "posted", paidAmount: 0, grandTotal: 10_000_000, withholdingAmount: 0, balanceDue: 10_000_000, purchaseOrderId: null, slug: "bill-1",
+    })
+    mocks.prismaMock.withholdingCertificate.findMany.mockResolvedValueOnce([{ id: 16 }])
+    mocks.reverseJournalsByReferenceTxMock.mockClear()
+
+    const res = await actions.voidVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    expect(mocks.reverseJournalsByReferenceTxMock).toHaveBeenCalledWith(
+      mocks.prismaMock, "VendorBill", 1, expect.stringContaining("Pembatalan tagihan vendor"), 1,
+    )
+    expect(mocks.reverseJournalsByReferenceTxMock).toHaveBeenCalledWith(
+      mocks.prismaMock, "WithholdingCertificate", [16], expect.stringContaining("Pembatalan tagihan vendor"), 1,
+    )
+  })
+
+  it("H1: updatePurchaseRequest & updatePurchaseOrder memanggil requestApprovalIfConfigured di dalam tx", async () => {
+    const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service")
+    vi.mocked(requestApprovalIfConfigured).mockClear()
+
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, name: "Item 1", isActive: true, deletedAt: null }])
+    mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 1, isActive: true, deletedAt: null })
+    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", documentNo: "PR-1" })
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValueOnce({ status: "draft", vendorId: null })
+    mocks.prismaMock.purchaseRequest.update.mockResolvedValueOnce({ id: 1 })
+    const prRes = await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+    }))
+    expect(prRes?.success).toBe(true)
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith("PurchaseRequest", 1, 1, mocks.prismaMock)
+
+    vi.mocked(requestApprovalIfConfigured).mockClear()
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 2, status: "draft", documentNo: "PO-2" })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValueOnce({ status: "draft", isService: false, workOrderId: null, vendorId: 1, purchaseRequestId: null })
+    mocks.prismaMock.purchaseOrder.update.mockResolvedValueOnce({ id: 2 })
+    const poRes = await actions.updatePurchaseOrder(2, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, unitPrice: 1000 }]),
+    }))
+    expect(poRes?.success).toBe(true)
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith("PurchaseOrder", 2, 1, mocks.prismaMock)
+  })
+
   it("regression round 18: voidVendorBill menolak tagihan lunas lewat kredit vendor (paidAmount 0, balanceDue turun non-kas)", async () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "paid", paidAmount: 0, grandTotal: 1000000, withholdingAmount: 0,

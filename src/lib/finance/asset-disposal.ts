@@ -51,35 +51,49 @@ export function buildAssetDisposalEntries(params: BuildAssetDisposalParams): Ass
     throw new Error("Akun akumulasi penurunan nilai belum dipetakan untuk membalik impairment saat pelepasan aset.")
   }
 
+  const toSen = (n: number) => Math.round(n * 100)
+  const grossSen = toSen(grossCost)
+  const bookSen = toSen(bookValue)
+  const impairmentSen = toSen(accumulatedImpairment)
+  const proceedsSen = toSen(proceeds)
+  if (
+    !Number.isFinite(grossSen) ||
+    !Number.isFinite(bookSen) ||
+    !Number.isFinite(impairmentSen) ||
+    !Number.isFinite(proceedsSen)
+  ) {
+    throw new Error("Nominal pelepasan aset tidak valid.")
+  }
+
   // bookValue sudah neto impairment, jadi gross − book = penyusutan + impairment.
-  const accumulatedDep = grossCost - bookValue - accumulatedImpairment // depreciation booked so far
-  const gainLoss = proceeds - bookValue // positive = gain, negative = loss
-  const round = (n: number) => Math.round(n * 100) / 100
+  // Hitung seluruh kaki dalam bilangan bulat sen agar pembulatan independen tidak menimbulkan selisih debit/kredit.
+  const accumDepSen = grossSen - bookSen - impairmentSen
+  const gainLossSen = proceedsSen - bookSen
 
   const entries: AssetDisposalEntry[] = []
 
-  if (proceeds > 0) {
-    entries.push({ accountId: accounts.cashBank, debit: round(proceeds), credit: 0, memo: `Hasil pelepasan - ${assetName}` })
+  if (proceedsSen > 0) {
+    entries.push({ accountId: accounts.cashBank, debit: proceedsSen / 100, credit: 0, memo: `Hasil pelepasan - ${assetName}` })
   }
-  if (accumulatedDep > 0) {
-    entries.push({ accountId: accounts.accumDep, debit: round(accumulatedDep), credit: 0, memo: `Penghapusan akumulasi penyusutan - ${assetName}` })
+  if (accumDepSen > 0) {
+    entries.push({ accountId: accounts.accumDep, debit: accumDepSen / 100, credit: 0, memo: `Penghapusan akumulasi penyusutan - ${assetName}` })
   }
-  if (accumulatedImpairment > 0) {
-    entries.push({ accountId: accounts.accumImpairment!, debit: round(accumulatedImpairment), credit: 0, memo: `Penghapusan akumulasi penurunan nilai - ${assetName}` })
+  if (impairmentSen > 0) {
+    entries.push({ accountId: accounts.accumImpairment!, debit: impairmentSen / 100, credit: 0, memo: `Penghapusan akumulasi penurunan nilai - ${assetName}` })
   }
   // Remove the asset at gross cost.
-  entries.push({ accountId: accounts.fixedAsset, debit: 0, credit: round(grossCost), memo: `Penghapusan aset tetap - ${assetName}` })
+  entries.push({ accountId: accounts.fixedAsset, debit: 0, credit: grossSen / 100, memo: `Penghapusan aset tetap - ${assetName}` })
   // Residual gain (credit) or loss (debit).
-  if (gainLoss > 0) {
-    entries.push({ accountId: accounts.gainLoss, debit: 0, credit: round(gainLoss), memo: `Laba pelepasan - ${assetName}` })
-  } else if (gainLoss < 0) {
-    entries.push({ accountId: accounts.gainLoss, debit: round(-gainLoss), credit: 0, memo: `Rugi pelepasan - ${assetName}` })
+  if (gainLossSen > 0) {
+    entries.push({ accountId: accounts.gainLoss, debit: 0, credit: gainLossSen / 100, memo: `Laba pelepasan - ${assetName}` })
+  } else if (gainLossSen < 0) {
+    entries.push({ accountId: accounts.gainLoss, debit: -gainLossSen / 100, credit: 0, memo: `Rugi pelepasan - ${assetName}` })
   }
 
-  const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
-  const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    throw new Error(`Jurnal pelepasan aset tidak balance: D=${totalDebit} K=${totalCredit}`)
+  const totalDebitSen = entries.reduce((s, e) => s + Math.round(e.debit * 100), 0)
+  const totalCreditSen = entries.reduce((s, e) => s + Math.round(e.credit * 100), 0)
+  if (totalDebitSen !== totalCreditSen) {
+    throw new Error(`Jurnal pelepasan aset tidak balance: D=${totalDebitSen / 100} K=${totalCreditSen / 100}`)
   }
 
   return entries

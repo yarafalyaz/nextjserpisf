@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { updateRack } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
@@ -30,14 +31,16 @@ export function RackEditForm({ id, code, name, warehouseId, warehouses }: Props)
     const formData = new FormData(e.currentTarget)
     formData.set("warehouseId", whId)
     startTransition(async () => {
-      const res = await updateRack(id, formData)
-      if (res && !res.success) {
-        showError(res.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess("Data berhasil diperbarui")
-      router.push("/inventaris/rak")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await updateRack(id, formData)
+        if (res && !res.success) {
+          showError(res.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Data berhasil diperbarui")
+        router.push("/inventaris/rak")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 

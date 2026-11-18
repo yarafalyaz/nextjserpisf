@@ -670,14 +670,14 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                               value={u.factorToBase}
                               onChange={(e) => updateUom(i, "factorToBase", e.target.value)}
                               aria-label={`Faktor konversi satuan alternatif ${i + 1}`}
-                              className="h-9 w-28 text-xs text-right font-mono tabular-nums"
+                              className="h-11 md:h-9 w-28 text-xs text-right font-mono tabular-nums"
                               placeholder="cth. 12"
                             />
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{watch("unitOfMeasure") || "PCS"}</span>
                           </div>
                         </td>
                         <td className="py-2 px-2 text-center">
-                          <Button type="button" onPress={() => removeUom(i)} aria-label={`Hapus konversi satuan ${i + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2">
+                          <Button type="button" onPress={() => removeUom(i)} aria-label={`Hapus konversi satuan ${i + 1}`} variant="danger-soft" size="sm" className="min-h-11 md:min-h-9 px-2">
                             <Trash2 className="size-3.5" aria-hidden="true" />
                           </Button>
                         </td>

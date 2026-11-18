@@ -210,7 +210,7 @@ describe("Approval Progression Actions", () => {
     });
 
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1, expect.anything());
+    expect(mocks.syncPettyCashMock).not.toHaveBeenCalled();
     expect(mocks.reimbursementAccrualMock).toHaveBeenCalledWith(55, 1, expect.anything());
   });
 

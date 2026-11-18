@@ -165,4 +165,23 @@ describe("statutory rule actions (P1-6)", () => {
     expect(res.success).toBe(true)
     expect(mocks.ruleDelete).toHaveBeenCalled()
   })
+
+  it("regresi H10(a): createStatutoryRule menolak value negatif dan menerima value 0", async () => {
+    const neg = await createStatutoryRule(
+      fd({ key: "bpjs_jp_ceiling", value: "-1", effectiveFrom: "2026-01-01" }),
+    )
+    expect(neg.success).toBe(false)
+    expect(String(neg.error)).toContain("negatif")
+    expect(mocks.ruleCreate).not.toHaveBeenCalled()
+
+    const zero = await createStatutoryRule(
+      fd({ key: "bpjs_jp_ceiling", value: "0", effectiveFrom: "2026-01-01" }),
+    )
+    expect(zero.success).toBe(true)
+    expect(mocks.ruleCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ value: 0 }),
+      }),
+    )
+  })
 })

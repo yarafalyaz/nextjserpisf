@@ -85,7 +85,7 @@ describe("VendorPaymentDraftQueueCard 072-F AC-VPQ-F1..F3", () => {
         "1 mengendap · 1 menunggu konfirmasi · 2 pembayaran draft, Rp 2.000.000 nilai draft belum dibayar",
         "Mengendap: 1",
         "Menunggu Konfirmasi: 1",
-        "Vendor Uji: 2 pembayaran draft (1 mengendap, 1 menunggu konfirmasi) — Rp 2.000.000 nilai draft belum dibayar",
+        "Vendor Uji: 2 pembayaran draft (1 mengendap, 1 menunggu konfirmasi) - Rp 2.000.000 nilai draft belum dibayar",
         "Mengendap",
         "5 hari",
         "Menunggu Konfirmasi",
@@ -145,7 +145,7 @@ describe("VendorPaymentDraftQueueCard 072-F AC-VPQ-F1..F3", () => {
       "99 hari",
       "42 mengendap · 3 menunggu konfirmasi · 45 pembayaran draft",
       "Rp 424.242 nilai draft belum dibayar",
-      "Vendor Uji: 42 pembayaran draft (40 mengendap, 2 menunggu konfirmasi) — Rp 424.242 nilai draft belum dibayar",
+      "Vendor Uji: 42 pembayaran draft (40 mengendap, 2 menunggu konfirmasi) - Rp 424.242 nilai draft belum dibayar",
     ])
   })
 

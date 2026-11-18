@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, useState } from "react"
 import { updateUserRoles, toggleUserActive, updateUserWarehouses } from "@/actions/auth.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 
 // Panel ini adalah SATU-SATUNYA UI yang memanggil updateUserRoles,
@@ -58,13 +59,15 @@ export function UserAccessPanel({
 
   function saveRoles() {
     startTransition(async () => {
-      const result = await updateUserRoles(userId, selectedRoleIds)
-      if (result.error) {
-        showError(result.error)
-        return
-      }
-      showSuccess("Peran pengguna diperbarui")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await updateUserRoles(userId, selectedRoleIds)
+        if (result.error) {
+          showError(result.error)
+          return
+        }
+        showSuccess("Peran pengguna diperbarui")
+        router.refresh()
+      }, "Gagal memperbarui peran pengguna")
     })
   }
 
@@ -80,25 +83,29 @@ export function UserAccessPanel({
 
   function saveWarehouses() {
     startTransition(async () => {
-      const result = await updateUserWarehouses(userId, selectedWarehouseIds)
-      if (result.error) {
-        showError(result.error)
-        return
-      }
-      showSuccess("Akses gudang diperbarui")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await updateUserWarehouses(userId, selectedWarehouseIds)
+        if (result.error) {
+          showError(result.error)
+          return
+        }
+        showSuccess("Akses gudang diperbarui")
+        router.refresh()
+      }, "Gagal memperbarui akses gudang")
     })
   }
 
   function toggleActive() {
     startTransition(async () => {
-      const result = await toggleUserActive(userId)
-      if (result.error) {
-        showError(result.error)
-        return
-      }
-      showSuccess(isActive ? "Pengguna dinonaktifkan" : "Pengguna diaktifkan")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await toggleUserActive(userId)
+        if (result.error) {
+          showError(result.error)
+          return
+        }
+        showSuccess(isActive ? "Pengguna dinonaktifkan" : "Pengguna diaktifkan")
+        router.refresh()
+      }, "Gagal mengubah status pengguna")
     })
   }
 

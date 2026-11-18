@@ -19,7 +19,7 @@ import { FormCard, FormSection, FormActions } from "@/components/ui/form-section
 import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import {
   EMPLOYMENT_STATUSES,
   EMPLOYMENT_STATUS_LABELS,
@@ -192,7 +192,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
       managerId: employee?.managerId ?? null,
-      joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
+      joinDate: toDateInputValue(employee?.joinDate) || wibDateOnly(new Date()),
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
       employmentStatus: employee?.employmentStatus || "",

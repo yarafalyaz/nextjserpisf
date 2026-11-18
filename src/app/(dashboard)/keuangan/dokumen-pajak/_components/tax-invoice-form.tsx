@@ -10,6 +10,7 @@ import {
   creditInputInvoiceAction,
 } from "@/actions/tax-documents.actions"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormSelect } from "@/components/ui/form-select"
@@ -17,7 +18,7 @@ import { AppMonthPicker } from "@/components/ui/month-picker"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { useTaxDocSubmit, useTaxDocAction, type TaxOption } from "./tax-doc-submit"
 
 export type { TaxOption }
@@ -54,7 +55,7 @@ export function TaxInvoiceForm({
     "/laporan/pajak",
   )
   const [direction, setDirection] = useState("out")
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [linkId, setLinkId] = useState("")
   const [sellingPrice, setSellingPrice] = useState<number | null>(null)
 
@@ -74,7 +75,7 @@ export function TaxInvoiceForm({
       onSubmit={handleSubmit}
       aria-busy={isPending}
       aria-label="Formulir terbit faktur pajak"
-      className="bg-surface rounded-xl border border-default shadow-sm p-6"
+      className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
@@ -149,14 +150,14 @@ export function TaxInvoiceForm({
           </div>
         ) : null}
       </div>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button type="submit" isDisabled={isPending}>
-          {isPending ? "Menerbitkan…" : "Terbitkan Faktur Pajak"}
-        </Button>
-        <Button type="button" variant="outline" isDisabled={isPending} onClick={() => router.push("/laporan/pajak")}>
+      <FormActions>
+        <Button type="button" variant="outline" isDisabled={isPending} onClick={() => router.push("/laporan/pajak")} className="w-full md:w-auto">
           Batal
         </Button>
-      </div>
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">
+          {isPending ? "Menerbitkan…" : "Terbitkan Faktur Pajak"}
+        </Button>
+      </FormActions>
     </form>
   )
 }
@@ -166,7 +167,7 @@ export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[]
   const { isPending, keyRef, run } = useTaxDocAction()
   const [mode, setMode] = useState<"replace" | "cancel" | "credit" | "">("")
   const [invoiceId, setInvoiceId] = useState("")
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [sellingPrice, setSellingPrice] = useState<number | null>(null)
   const [creditPeriod, setCreditPeriod] = useState("")
 

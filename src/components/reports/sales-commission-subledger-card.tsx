@@ -19,7 +19,7 @@ import { ReportCardShell } from "./report-card-shell"
 
 const RECONCILIATION_REASON_LABELS: Record<string, string> = {
   "lawan-melebihi-akrual": "Lawan (retur/batal) melebihi akrual",
-  "saldo-negatif-retur-sesudah-terbayar": "Saldo negatif — retur sesudah komisi terbayar",
+  "saldo-negatif-retur-sesudah-terbayar": "Saldo negatif: retur sesudah komisi terbayar",
 }
 
 function reconciliationReasonLabel(reason: string): string {

@@ -38,6 +38,7 @@ const TEXT_PROPS = new Set([
   "placeholder",
   "title",
   "label",
+  "customLabel",
   "alt",
   "description",
   "caption",
@@ -45,6 +46,9 @@ const TEXT_PROPS = new Set([
   "tooltip",
   "emptyMessage",
   "emptyLabel",
+  "emptyText",
+  "notice",
+  "summary",
   "aria-label",
   "aria-description",
   "aria-placeholder",
@@ -173,6 +177,22 @@ function scanText(
   }
 }
 
+/**
+ * Pengisi sel kosong murni: `<td>—</td>` / `<DetailTableTd>—</DetailTableTd>`
+ * di mana `"—"` adalah SATU-SATUNYA anak elemen. Teks `"{a} — {b}"` punya anak
+ * saudara (`JsxExpression`) di elemen yang sama sehingga tetap dilaporkan.
+ */
+function isStandaloneJsxEmptyCell(node: ts.JsxText): boolean {
+  if (!PLACEHOLDER.test(node.text)) return false
+  const parent = node.parent
+  if (!parent || !ts.isJsxElement(parent)) return false
+  return !parent.children.some((child) => {
+    if (child === node) return false
+    if (ts.isJsxText(child)) return child.text.trim().length > 0
+    return true
+  })
+}
+
 export function emDashHits(source: string, fileName = "x.tsx"): { line: number; where: string }[] {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const hits: { line: number; where: string }[] = []
@@ -216,7 +236,7 @@ export function emDashHits(source: string, fileName = "x.tsx"): { line: number; 
         }
       }
     }
-    if (ts.isJsxText(node) && node.text.includes(EM_DASH) && !PLACEHOLDER.test(node.text)) {
+    if (ts.isJsxText(node) && node.text.includes(EM_DASH) && !isStandaloneJsxEmptyCell(node)) {
       hits.push({ line: at(node), where: "teks JSX" })
     }
     if (ts.isJsxExpression(node) && node.expression && !inAttribute(node)) {
@@ -427,6 +447,8 @@ describe("R-02: em dash dilarang di teks UI", () => {
       [`<td>{cond ? "Kurang — tutup" : "cukup"}</td>`, "ekspresi JSX"],
       [`<td>{\`\${sku} — \${nama}\`}</td>`, "ekspresi JSX"],
       [`<Chip label={\`\${a} — \${b}\`} />`, "prop label"],
+      [`<StatusChip customLabel={\`\${a} — \${b}\`} />`, "prop customLabel"],
+      [`<span>{a} — {b}</span>`, "teks JSX"],
     ]
     for (const [source, where] of kasus) {
       const hits = emDashHits(source)

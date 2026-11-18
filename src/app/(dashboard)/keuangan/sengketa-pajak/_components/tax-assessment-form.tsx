@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 const KIND_OPTIONS = [
   { value: "SKPKB", label: "SKPKB" },
@@ -42,7 +42,7 @@ export function TaxAssessmentForm() {
   const [taxPeriod, setTaxPeriod] = useState("")
   const [assessedAmount, setAssessedAmount] = useState<number | null>(null)
   const [disputedAmount, setDisputedAmount] = useState<number | null>(null)
-  const [sentAt, setSentAt] = useState(toLocalDateOnly(new Date()))
+  const [sentAt, setSentAt] = useState(wibDateOnly(new Date()))
   const [receivedAt, setReceivedAt] = useState("")
   const [notes, setNotes] = useState("")
 

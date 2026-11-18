@@ -27,7 +27,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface PaymentFormProps {
   invoices: {
@@ -92,7 +92,7 @@ export function PaymentForm({
             )
           : 0),
       paymentDate:
-        payment?.paymentDate ?? toLocalDateOnly(new Date()),
+        payment?.paymentDate ?? wibDateOnly(new Date()),
       paymentMethod: payment?.paymentMethod ?? "",
       referenceNo: payment?.referenceNo ?? "",
       notes: payment?.notes ?? "",

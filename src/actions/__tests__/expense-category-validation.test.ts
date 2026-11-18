@@ -175,3 +175,47 @@ describe("deleteExpenseCategory referential guard", () => {
     expect(lockOrder).toBeLessThan(expenseCategoryDeleteMock.mock.invocationCallOrder[0])
   })
 })
+
+describe("L1: error sanitization, P2002 handling, and NEXT_REDIRECT rethrow", () => {
+  it("maps Prisma P2002 unique error on create/update to friendly duplicate message", async () => {
+    const p2002 = Object.assign(new Error("Unique constraint failed on the constraint"), { code: "P2002" })
+    expenseCategoryCreateMock.mockRejectedValueOnce(p2002)
+    const rCreate = await createExpenseCategory(fd({ name: "csr", label: "CSR" }))
+    expect(rCreate).toEqual({ success: false, error: "Nama kategori sudah ada" })
+
+    const p2002CodeOnly = Object.assign(new Error("db unique violation"), { code: "P2002" })
+    expenseCategoryUpdateMock.mockRejectedValueOnce(p2002CodeOnly)
+    const rUpdate = await updateExpenseCategory(5, fd({ name: "csr", label: "CSR" }))
+    expect(rUpdate).toEqual({ success: false, error: "Nama kategori sudah ada" })
+  })
+
+  it("sanitizes raw Prisma invocation errors via getErrorMessage on create/update/delete", async () => {
+    const rawPrismaErr = new Error("Invalid `prisma.expenseCategory.create()` invocation: Unique column")
+    expenseCategoryCreateMock.mockRejectedValueOnce(rawPrismaErr)
+    const rCreate = await createExpenseCategory(fd({ name: "csr", label: "CSR" }))
+    expect(rCreate.success).toBe(false)
+    expect(rCreate.error).toBe("Gagal menyimpan")
+
+    const rawDeleteErr = new Error("Invalid `prisma.expenseCategory.delete()` invocation: FK")
+    expenseCountMock.mockResolvedValueOnce(0)
+    pettyCashCountMock.mockResolvedValueOnce(0)
+    expenseCategoryDeleteMock.mockRejectedValueOnce(rawDeleteErr)
+    const rDelete = await deleteExpenseCategory(7)
+    expect(rDelete.success).toBe(false)
+    expect(rDelete.error).toBe("Gagal menghapus")
+  })
+
+  it("rethrows NEXT_REDIRECT errors across create/update/delete", async () => {
+    const redirectErr = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;push;/login" })
+    expenseCategoryCreateMock.mockRejectedValueOnce(redirectErr)
+    await expect(createExpenseCategory(fd({ name: "csr", label: "CSR" }))).rejects.toThrow(redirectErr)
+
+    expenseCategoryUpdateMock.mockRejectedValueOnce(redirectErr)
+    await expect(updateExpenseCategory(5, fd({ name: "csr", label: "CSR" }))).rejects.toThrow(redirectErr)
+
+    expenseCountMock.mockResolvedValueOnce(0)
+    pettyCashCountMock.mockResolvedValueOnce(0)
+    expenseCategoryDeleteMock.mockRejectedValueOnce(redirectErr)
+    await expect(deleteExpenseCategory(7)).rejects.toThrow(redirectErr)
+  })
+})

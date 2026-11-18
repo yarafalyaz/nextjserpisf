@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 
 export interface Option {
@@ -46,7 +46,7 @@ export function InvoiceExchangeForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [receiptNumber, setReceiptNumber] = useState("")
 
   // Hitung jatuh tempo default = Tanggal Penyerahan + Termin Hari
@@ -54,9 +54,8 @@ export function InvoiceExchangeForm({
     if (paymentTermDays == null || paymentTermDays < 0) return ""
     const [year, month, day] = date.split("-").map(Number)
     if (!year || !month || !day) return ""
-    const due = new Date(year, month - 1, day)
-    due.setDate(due.getDate() + paymentTermDays)
-    return toLocalDateOnly(due)
+    const due = new Date(Date.UTC(year, month - 1, day + paymentTermDays))
+    return wibDateOnly(due)
   }, [date, paymentTermDays])
 
   const [dueDate, setDueDate] = useState(defaultDueDate)

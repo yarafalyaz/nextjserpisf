@@ -78,8 +78,14 @@ export function Button({
 }: ButtonProps) {
   const shadVariant = variantMap[variant] ?? "secondary"
   const shadSize = isIconOnly ? "icon" : (sizeMap[size] ?? "default")
-  // `size="sm"` bawaan shadcn 32 px: di layar sentuh dinaikkan ke 44 px, desktop tetap 32 px.
-  const touchClass = !isIconOnly && size === "sm" ? "min-h-11 sm:min-h-8" : ""
+  // Pada pointer sentuh (< md), seluruh tombol mempertahankan tinggi target sentuh min 44 px.
+  const touchClass = isIconOnly
+    ? "min-h-11 min-w-11 md:min-h-9 md:min-w-9"
+    : size === "sm"
+      ? "min-h-11 md:min-h-8"
+      : size === "lg"
+        ? "min-h-11 md:min-h-10"
+        : "min-h-11 md:min-h-9"
 
   const variantClass = variant === "success"
     ? "bg-success text-success-foreground hover:bg-success/90 focus-visible:ring-success/20 dark:bg-success/60 dark:focus-visible:ring-success/40"

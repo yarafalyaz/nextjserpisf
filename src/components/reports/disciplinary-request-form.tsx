@@ -6,6 +6,7 @@ import { useState, useTransition } from "react"
 import { createDisciplinaryRecord } from "@/actions/disciplinary.actions"
 import { isDisciplinarySevereCategory } from "@/lib/reports/disciplinary"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
@@ -44,21 +45,23 @@ export function DisciplinaryRequestForm({
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
-      const result = await createDisciplinaryRecord({
-        employeeId: Number(employeeId),
-        level,
-        violationCategory: category,
-        violationDate,
-        description,
-        regulationReference: regulationReference.trim() || null,
-      })
-      if (!result.success) {
-        showError(result.error)
-        return
-      }
-      showSuccess("Pengajuan surat peringatan tersimpan sebagai draft")
-      router.push("/sdm/disiplin")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createDisciplinaryRecord({
+          employeeId: Number(employeeId),
+          level,
+          violationCategory: category,
+          violationDate,
+          description,
+          regulationReference: regulationReference.trim() || null,
+        })
+        if (!result.success) {
+          showError(result.error)
+          return
+        }
+        showSuccess("Pengajuan surat peringatan tersimpan sebagai draft")
+        router.push("/sdm/disiplin")
+        router.refresh()
+      }, "Gagal menyimpan pengajuan surat peringatan")
     })
   }
 

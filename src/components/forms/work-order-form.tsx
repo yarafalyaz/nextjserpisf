@@ -17,7 +17,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 
 export function WorkOrderForm({
@@ -70,7 +70,7 @@ export function WorkOrderForm({
   // Saat mengedit, tanggal harus di-seed dari dokumen lama: sebelumnya selalu
   // "hari ini", sehingga menyimpan ulang perintah kerja back-date memindahkan
   // dokumen (dan angka laporannya) ke periode berjalan.
-  const [date, setDate] = useState(workOrder?.date ?? toLocalDateOnly(new Date()));
+  const [date, setDate] = useState(workOrder?.date ?? wibDateOnly(new Date()));
   const [startDate, setStartDate] = useState(workOrder?.startDate ?? defaultStartDate);
   const [endDate, setEndDate] = useState(workOrder?.endDate ?? defaultEndDate);
   const [customerId, setCustomerId] = useState<string | null>(
@@ -328,7 +328,7 @@ export function WorkOrderForm({
                               aria-label={`Hapus baris ${i + 1}`}
                               variant="danger-soft"
                               size="sm"
-                              className="min-h-9 px-2"
+                              className="min-h-11 md:min-h-9 px-2"
                           >
                             <Trash2 className="size-3.5" aria-hidden="true" />
                           </Button>

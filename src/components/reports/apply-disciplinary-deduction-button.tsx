@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { formatCurrencyExact } from "@/lib/utils/format"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 /**
  * Jalur MANUAL penerapan potongan disiplin (BR-DISC-09).
@@ -30,7 +31,7 @@ export function ApplyDisciplinaryDeductionButton({
   const [terbuka, setTerbuka] = useState(false)
   const [period, setPeriod] = useState(defaultPeriod)
   const [periodPay, setPeriodPay] = useState("")
-  const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10))
+  const [tanggal, setTanggal] = useState(() => wibDateOnly(new Date()))
 
   function terapkan() {
     startTransition(async () => {

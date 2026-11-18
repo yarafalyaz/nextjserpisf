@@ -31,4 +31,23 @@ describe("computeQuotationLine/Totals (modul murni)", () => {
       }),
     ).toEqual({ computedSubtotal: 1400, headerDiscount: 1400, headerTax: 100, computedGrandTotal: 100 })
   })
+
+  it("regresi M5: diskon fixed negatif, harga negatif, qty negatif, dan NaN/Infinity di-clamp aman tanpa menggembungkan total", () => {
+    expect(computeQuotationLine({ qty: 2, unitPrice: 100_000, discount: -50_000, discountType: "fixed" })).toEqual({
+      discountAmount: 0,
+      total: 200_000,
+    })
+    expect(computeQuotationLine({ qty: -5, unitPrice: -100_000, discount: 999_999, discountType: "fixed" })).toEqual({
+      discountAmount: 0,
+      total: 0,
+    })
+    expect(computeQuotationLine({ qty: 1, unitPrice: 1000, discount: 5000, discountType: "fixed" })).toEqual({
+      discountAmount: 1000,
+      total: 0,
+    })
+    expect(computeQuotationLine({ qty: Number.NaN, unitPrice: Number.POSITIVE_INFINITY, discount: Number.NaN })).toEqual({
+      discountAmount: 0,
+      total: 0,
+    })
+  })
 })

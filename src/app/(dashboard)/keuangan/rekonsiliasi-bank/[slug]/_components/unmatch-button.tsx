@@ -6,6 +6,7 @@ import { XCircle } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { unmatchReconciliationLine } from "@/actions/finance.actions"
 
 // Tombol pembatal kecocokan: satu-satunya UI yang memanggil
@@ -24,15 +25,19 @@ export function UnmatchButton({
 
   function doUnmatch() {
     startTransition(async () => {
-      const res = await unmatchReconciliationLine(reconciliationId, itemId)
-      if (!res.success) {
-        showError(res.error || "Gagal membatalkan kecocokan")
-        setOpen(false)
-        return
-      }
-      showSuccess("Kecocokan dibatalkan")
-      setOpen(false)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await unmatchReconciliationLine(reconciliationId, itemId)
+          if (!res.success) {
+            showError(res.error || "Gagal membatalkan kecocokan")
+            return
+          }
+          showSuccess("Kecocokan dibatalkan")
+          router.refresh()
+        },
+        "Gagal membatalkan kecocokan",
+        () => setOpen(false),
+      )
     })
   }
 

@@ -11,7 +11,7 @@ import {
 } from "@/lib/utils/prefill-path"
 
 import type { Metadata } from "next"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 export const metadata: Metadata = { title: "Tambah Perintah Kerja" }
 
@@ -117,7 +117,7 @@ export default async function CreateWorkOrderPage({
 
     const customerName = quotation.customer?.name ?? "-"
     const projectName = project?.name ?? `Projek ${customerName}`
-    const today = toLocalDateOnly(new Date())
+    const today = wibDateOnly(new Date())
 
     // Use project dates if available
     if (project?.startDate) {

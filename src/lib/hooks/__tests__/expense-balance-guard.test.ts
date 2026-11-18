@@ -319,4 +319,33 @@ describe("onExpenseApprovedSyncPettyCash race + period + deteksi akun", () => {
     expect(updatedIds).not.toContain(77)
     expect(updatedIds).not.toContain(78)
   })
+
+  it("H3: klaim reimbursement dilewati saat approve dan disinkronkan saat allowReimbursementPayout: true dengan payoutDate", async () => {
+    const claimDate = new Date("2026-01-10T00:00:00Z")
+    const payoutDate = new Date("2026-02-05T00:00:00Z")
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 99, documentNo: "CLM-099", amount: 50_000, paidFromAccountId: 10,
+      status: "approved", date: claimDate, isReimbursementClaim: true,
+    })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil", isActive: true, deletedAt: null })
+    mocks.pettyCashFindFirst.mockResolvedValue(null)
+    mocks.pettyCashFindMany.mockResolvedValue([])
+
+    await onExpenseApprovedSyncPettyCash(99, 7)
+    expect(mocks.pettyCashCreate).not.toHaveBeenCalled()
+
+    await onExpenseApprovedSyncPettyCash(99, 7, undefined, {
+      allowReimbursementPayout: true,
+      payoutDate,
+    })
+    expect(mocks.pettyCashCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceNo: "CLM-099",
+          date: payoutDate,
+          transactionDate: payoutDate,
+        }),
+      }),
+    )
+  })
 })

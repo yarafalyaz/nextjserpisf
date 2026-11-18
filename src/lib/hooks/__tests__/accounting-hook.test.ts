@@ -972,6 +972,55 @@ describe("onSalesInvoicePosted", () => {
     });
   });
 
+  it("H4: posting persists FIFO auto-picked consumedSerials to salesInvoiceItem.serialNumbers", async () => {
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ id: 502, itemId: 50, qty: 2, cost: 100, serialNumbers: null }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
+    ]);
+    mocks.fifoConsume.mockResolvedValue({
+      consumedCost: 200,
+      shortfall: 0,
+      consumedLayers: [{ batchNumber: "LOT-A", warehouseId: 7, qty: 2, unitCost: 100 }],
+      consumedSerials: ["SN-AUTO-1", "SN-AUTO-2"],
+    });
+    mocks.journalCreate.mockResolvedValue({ id: 51 });
+
+    await onSalesInvoicePosted(1, 999);
+
+    expect(mocks.salesInvoiceItemUpdate).toHaveBeenCalledWith({
+      where: { id: 502 },
+      data: {
+        batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 7, qty: 2, unitCost: 100 }],
+        serialNumbers: ["SN-AUTO-1", "SN-AUTO-2"],
+      },
+    });
+  });
+
+  it("H4: posting does not overwrite explicit line.serialNumbers with consumedSerials", async () => {
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ id: 503, itemId: 50, qty: 1, cost: 100, serialNumbers: ["SN-MANUAL-1"] }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
+    ]);
+    mocks.fifoConsume.mockResolvedValue({
+      consumedCost: 100,
+      shortfall: 0,
+      consumedLayers: [{ batchNumber: "LOT-A", warehouseId: 7, qty: 1, unitCost: 100 }],
+      consumedSerials: ["SN-MANUAL-1"],
+    });
+    mocks.journalCreate.mockResolvedValue({ id: 52 });
+
+    await onSalesInvoicePosted(1, 999);
+
+    expect(mocks.salesInvoiceItemUpdate).toHaveBeenCalledWith({
+      where: { id: 503 },
+      data: {
+        batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 7, qty: 1, unitCost: 100 }],
+      },
+    });
+  });
+
   it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
     const inner = innerInvoice({ totalAmount: 1000 });
     seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);

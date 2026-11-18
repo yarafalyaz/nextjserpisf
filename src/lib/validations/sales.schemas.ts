@@ -32,11 +32,14 @@ const optionalId = z.coerce.number().int().min(1).optional();
 export const quotationItemPayloadSchema = z.object({
   itemId: z.coerce.number().int().min(1).nullable().optional(),
   description: z.string().max(1000).nullable().optional(),
-  qty: z.coerce.number().default(1),
+  qty: z.coerce.number().finite().min(0.01, "Kuantitas minimal 0.01").default(1),
   uom: z.string().max(50).nullable().optional(),
-  unitPrice: z.coerce.number().default(0),
+  unitPrice: z.coerce.number().finite().min(0, "Harga satuan tidak boleh negatif").default(0),
   discountType: z.enum(["fixed", "percent", "amount"]).optional().default("fixed"),
-  discount: z.coerce.number().optional().default(0),
+  // Diskon baris (fixed/percent) tetap di-clamp di computeQuotationLine agar
+  // payload tamparan tetap ter-clamp aman sesuai kontrak anti-tamper (lihat
+  // sales-quotation.actions.test.ts dan pola updateSalesInvoiceSchema).
+  discount: z.coerce.number().finite().optional().default(0),
   sortOrder: z.coerce.number().int().optional(),
 });
 

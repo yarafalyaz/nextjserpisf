@@ -97,49 +97,50 @@ export function SalesOrderDraftQueueCard({
       <div className="p-4 px-5">
         {/* Toolbar Interaktif & Segmented Filter */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/60">
-          <ul
+          <div
             aria-label="Rekap tingkat antrean pesanan draft"
             role="tablist"
             className="flex flex-wrap items-center rounded-lg border border-border bg-muted/40 p-1 text-xs gap-1"
+            onKeyDown={(e) => {
+              const tabKeys: Array<"all" | SalesOrderDraftLevel> = ["all", ...SALES_ORDER_DRAFT_LEVELS]
+              const idx = tabKeys.indexOf(filterLevel)
+              if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                e.preventDefault()
+                const next = tabKeys[(idx + 1) % tabKeys.length]
+                setFilterLevel(next)
+              } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                e.preventDefault()
+                const prev = tabKeys[(idx - 1 + tabKeys.length) % tabKeys.length]
+                setFilterLevel(prev)
+              }
+            }}
           >
-            <li role="presentation">
-              <span
-                role="tab"
-                tabIndex={0}
-                aria-selected={filterLevel === "all"}
-                onClick={() => setFilterLevel("all")}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    setFilterLevel("all")
-                  }
-                }}
-                className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
-                  filterLevel === "all"
-                    ? "bg-card text-foreground font-semibold shadow-2xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Semua Draft ({totalDocuments})
-              </span>
-            </li>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterLevel === "all"}
+              tabIndex={filterLevel === "all" ? 0 : -1}
+              onClick={() => setFilterLevel("all")}
+              className={`inline-flex min-h-11 md:min-h-8 items-center px-3 py-1 rounded-md text-xs font-medium cursor-pointer transition-colors ${
+                filterLevel === "all"
+                  ? "bg-card text-foreground font-semibold shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Semua Draft ({totalDocuments})
+            </button>
             {SALES_ORDER_DRAFT_LEVELS.map((level) => {
               const count = levelCounts[level]
               const isSelected = filterLevel === level
               return (
-                <li
+                <button
                   key={level}
+                  type="button"
                   role="tab"
                   aria-selected={isSelected}
                   tabIndex={isSelected ? 0 : -1}
                   onClick={() => setFilterLevel(level)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      setFilterLevel(level)
-                    }
-                  }}
-                  className={`cursor-pointer rounded-full transition-all ${
+                  className={`inline-flex min-h-11 md:min-h-8 items-center cursor-pointer rounded-full px-1 transition-all ${
                     isSelected ? "ring-2 ring-primary ring-offset-1" : "opacity-85 hover:opacity-100"
                   }`}
                 >
@@ -148,10 +149,10 @@ export function SalesOrderDraftQueueCard({
                     customLabel={`${SALES_ORDER_DRAFT_LEVEL_LABELS[level]}: ${count}`}
                     customTone={LEVEL_TONES[level]}
                   />
-                </li>
+                </button>
               )
             })}
-          </ul>
+          </div>
 
           <div className="relative w-full sm:w-64">
             <Search
@@ -163,7 +164,7 @@ export function SalesOrderDraftQueueCard({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari pelanggan, no. SO, sales..."
-              className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-11 md:h-8 w-full rounded-md border border-input bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
         </div>

@@ -89,7 +89,7 @@ function SortButton({
       type="button"
       variant="ghost"
       size="sm"
-      className="-ml-2.5 h-7 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+      className="-ml-2.5 min-h-11 md:min-h-7 md:h-7 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
       onClick={onClick}
       aria-label={`Urutkan ${label}`}
     >
@@ -289,7 +289,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
         <CardTitle id={titleId}>Faktur Terbaru</CardTitle>
         <CardDescription>10 faktur penjualan terakhir beserta progres pelunasan</CardDescription>
         <CardAction>
-          <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+          <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
             <Link href="/penjualan/faktur">
               Semua Faktur <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </Link>

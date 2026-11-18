@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 
 /**
@@ -43,7 +44,7 @@ export function ReturnItemsSection<TItem extends { itemId: number; qty: number; 
     <div style={{ marginTop: "24px" }}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Item Retur</h3>
-        <Button type="button" onPress={addItem} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-9 px-3">
+        <Button type="button" onPress={addItem} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-11 md:min-h-9 px-3">
           <Plus className="size-3.5" aria-hidden="true" />
           <span>Tambah Item</span>
         </Button>
@@ -78,13 +79,13 @@ export function ReturnItemsSection<TItem extends { itemId: number; qty: number; 
                   aria-label={`Jumlah baris ${index + 1}`}
                   value={ri.qty}
                   onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
-                  className="h-9 text-xs text-right font-mono tabular-nums"
+                  className="h-11 md:h-9 text-xs text-right font-mono tabular-nums"
                 />
               </td>
               {renderExtraCells?.(ri, index)}
               <td className="p-2 text-center">
                 {returnItems.length > 1 && (
-                  <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2">
+                  <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm" className="min-h-11 md:min-h-9 px-2">
                     <Trash2 className="size-3.5" aria-hidden="true" />
                   </Button>
                 )}
@@ -110,12 +111,12 @@ export function ReturnFormActions({
   onCancel: () => void
 }) {
   return (
-    <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-      <Button type="button" onPress={onCancel} >Batal</Button>
-      <Button type="submit" isDisabled={isPending}  id={submitId}>
+    <FormActions>
+      <Button type="button" onPress={onCancel} className="w-full md:w-auto">Batal</Button>
+      <Button type="submit" isDisabled={isPending} id={submitId} className="w-full md:w-auto">
         {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
       </Button>
-    </div>
+    </FormActions>
   )
 }
 

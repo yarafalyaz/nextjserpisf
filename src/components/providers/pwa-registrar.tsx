@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Download, X } from "@/components/ui/fontawesome-icons"
+import { showError } from "@/lib/utils/toast"
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -16,9 +17,11 @@ export function PwaRegistrar() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.warn("[PWA] Service worker registration skipped:", err)
-      })
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .catch((err) => {
+          console.warn("[PWA] Service worker registration skipped:", err)
+        })
     }
 
     const handleBeforeInstall = (e: Event) => {
@@ -43,10 +46,14 @@ export function PwaRegistrar() {
 
   async function handleInstall() {
     if (!installEvent) return
-    await installEvent.prompt()
-    const choice = await installEvent.userChoice
-    if (choice.outcome === "accepted") {
-      setInstallEvent(null)
+    try {
+      await installEvent.prompt()
+      const choice = await installEvent.userChoice
+      if (choice.outcome === "accepted") {
+        setInstallEvent(null)
+      }
+    } catch (err) {
+      showError(err instanceof Error && err.message ? err.message : "Gagal memasang aplikasi")
     }
   }
 
@@ -77,7 +84,7 @@ export function PwaRegistrar() {
         <button
           type="button"
           onClick={handleInstall}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 min-h-9 text-xs font-medium text-primary-foreground active:scale-[0.98]"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 min-h-11 text-xs font-medium text-primary-foreground active:scale-[0.98]"
         >
           <Download className="size-3.5" aria-hidden="true" />
           Pasang
@@ -86,7 +93,7 @@ export function PwaRegistrar() {
           type="button"
           onClick={handleDismiss}
           aria-label="Tutup ajakan pasang aplikasi"
-          className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
         >
           <X className="size-4" aria-hidden="true" />
         </button>

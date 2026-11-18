@@ -159,13 +159,36 @@ function staleCheckModel(db: any, referenceType: string): any | null {
   return db?.[modelKey] ?? null;
 }
 
+export interface RequestApprovalOptions {
+  /**
+   * When true, do not create an initial Approval row if none exists yet
+   * (for edit paths on models whose approval starts on send/submit,
+   * e.g., Quotation or SalesOrder).
+   */
+  existingOnly?: boolean;
+  /**
+   * When true (default), editing a document while an Approval is `pending`
+   * past Step 1 (`currentStep > 1` or prior `approve` history exists)
+   * cancels that stale pending row and opens a fresh Step-1 `pending` row.
+   */
+  resetPendingOnEdit?: boolean;
+}
+
 export async function requestApprovalIfConfigured(
   referenceType: string,
   referenceId: number,
   requestedBy?: number,
   txClient?: any,
+  options?: RequestApprovalOptions,
 ): Promise<boolean> {
-  const createApproval = async (db: any, workflowId: number): Promise<true> => {
+  const existingOnly = options?.existingOnly ?? false;
+  const resetPendingOnEdit = options?.resetPendingOnEdit ?? true;
+
+  const createApproval = async (
+    db: any,
+    workflowId: number,
+    requesterId: number | null = requestedBy ?? null,
+  ): Promise<true> => {
     // Putaran 78: slug lewat delegate transaksi pemanggil — varian global tidak
     // melihat approval tak-tercommit dari createAsset/pemanggil lain yang
     // berbagi stem sama, sehingga dua dokumen konkuren bisa memilih slug sama
@@ -179,7 +202,7 @@ export async function requestApprovalIfConfigured(
         referenceId,
         currentStep: 1,
         status: "pending",
-        requestedBy: requestedBy ?? null,
+        requestedBy: requesterId,
         requestedAt: new Date(),
       },
     })
@@ -188,7 +211,7 @@ export async function requestApprovalIfConfigured(
       referenceType,
       referenceId,
       currentStep: 1,
-      requestedBy: requestedBy ?? null,
+      requestedBy: requesterId,
       slug,
     })
     return true
@@ -203,12 +226,58 @@ export async function requestApprovalIfConfigured(
     `
     if (!lockedWorkflow) return false
 
-    const existing = await db.approval.findFirst({
+    let existing = await db.approval.findFirst({
       where: { referenceType, referenceId },
       orderBy: { id: "desc" },
     })
     if (existing) {
-      if (existing.status === "pending") return true
+      if (existing.status === "pending") {
+        // Lock the pending approval row before checking step/history so a
+        // concurrent approveStep cannot commit Step 2 while we reset to Step 1.
+        if (typeof db.$executeRaw === "function") {
+          await db.$executeRaw`SELECT id FROM approvals WHERE id = ${existing.id} FOR UPDATE`
+        }
+        const latestBeforeReset = typeof db.approval.findUnique === "function"
+          ? await db.approval.findUnique({ where: { id: existing.id } })
+          : existing
+        if (latestBeforeReset) existing = latestBeforeReset
+
+        if (existing.status === "pending") {
+          const priorApprove =
+            resetPendingOnEdit && typeof db.approvalHistory?.findFirst === "function"
+              ? await db.approvalHistory.findFirst({
+                  where: { approvalId: existing.id, action: "approve" },
+                  select: { id: true },
+                })
+              : null
+          const needsReset = resetPendingOnEdit && ((existing.currentStep ?? 1) > 1 || priorApprove != null)
+          if (!needsReset) return true
+
+          const cancelData = {
+            status: "cancelled",
+            completedAt: new Date(),
+            notes: "Dibatalkan otomatis karena dokumen diubah saat proses persetujuan",
+          }
+          if (typeof db.approval.updateMany === "function") {
+            const claimed = await db.approval.updateMany({
+              where: { id: existing.id, status: "pending" },
+              data: cancelData,
+            })
+            if (claimed.count === 0) {
+              const latestAfterClaim = typeof db.approval.findUnique === "function"
+                ? await db.approval.findUnique({ where: { id: existing.id } })
+                : null
+              if (!latestAfterClaim || latestAfterClaim.status === "pending") return true
+              existing = latestAfterClaim
+            } else {
+              return createApproval(db, lockedWorkflow.id, requestedBy ?? existing.requestedBy ?? null)
+            }
+          } else {
+            await db.approval.update({ where: { id: existing.id }, data: cancelData })
+            return createApproval(db, lockedWorkflow.id, requestedBy ?? existing.requestedBy ?? null)
+          }
+        }
+      }
       if (existing.status === "rejected") return createApproval(db, lockedWorkflow.id)
       if (existing.status === "approved") {
         // R6WN-01: edit dokumen sesudah approval final membuka pengajuan baru
@@ -225,14 +294,36 @@ export async function requestApprovalIfConfigured(
           }
         }
       }
+      if (existing.status === "cancelled" && !existingOnly) {
+        return createApproval(db, lockedWorkflow.id)
+      }
       return false
     }
 
+    if (existingOnly) return false
     return createApproval(db, lockedWorkflow.id)
   }
 
   if (txClient) return request(txClient)
   return prisma.$transaction((tx) => request(tx))
+}
+
+/**
+ * Reset a mid-approval workflow back to Step 1 when a draft document is edited.
+ * By default (`createIfMissing: false`), leaves documents without an existing
+ * Approval untouched (for Quotation/SalesOrder where approval begins on send/submit).
+ */
+export async function resetApprovalOnEditIfExists(
+  referenceType: string,
+  referenceId: number,
+  requestedBy?: number,
+  txClient?: any,
+  options?: { createIfMissing?: boolean },
+): Promise<boolean> {
+  return requestApprovalIfConfigured(referenceType, referenceId, requestedBy, txClient, {
+    existingOnly: !(options?.createIfMissing ?? false),
+    resetPendingOnEdit: true,
+  })
 }
 
 export async function assertApproved(

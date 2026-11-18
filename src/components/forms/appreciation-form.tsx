@@ -12,6 +12,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface AppreciationFormProps {
   employees: { id: number; name: string }[]
@@ -110,10 +111,10 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan apresiasi..." defaultValue={appreciation?.notes ?? ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : appreciation?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">{isPending ? "Menyimpan..." : appreciation?.id ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

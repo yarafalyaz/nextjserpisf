@@ -132,7 +132,7 @@ describe("LeadForm — panel duplikat DUP-F1", () => {
     expect(container.textContent).toContain(
       "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu, membuat ganda membagi tindak lanjut antar sales.",
     )
-    expect(container.textContent).toContain("LEAD-0007 — Budi Santoso (PT Maju)")
+    expect(container.textContent).toContain("LEAD-0007 - Budi Santoso (PT Maju)")
     expect(container.textContent).toContain("Status: Baru · Pemilik: Sari Sales · Nomor telepon sama")
     expect(container.textContent).toContain("••90")
     expect(container.textContent).toContain("•••@maju.id")

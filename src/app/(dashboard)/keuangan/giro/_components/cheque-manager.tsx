@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatAccountingExact } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
@@ -84,7 +84,7 @@ export function ChequeManager({
   const [party, setParty] = useState("")
   const [accountId, setAccountId] = useState("")
   const [amount, setAmount] = useState<number | null>(null)
-  const [dueDate, setDueDate] = useState(toLocalDateOnly(new Date()))
+  const [dueDate, setDueDate] = useState(wibDateOnly(new Date()))
   const [notes, setNotes] = useState("")
 
   // Confirm dialog state

@@ -16,7 +16,7 @@ import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-s
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatCurrencyExact } from "@/lib/utils/format"
 
 const downPaymentSchema = z.object({
@@ -71,7 +71,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
       customerId: downPayment?.customerId ?? _defaultCustomerId,
       quotationId: downPayment?.quotationId ?? _defaultQuotationId ?? undefined,
       amount: downPayment?.amount,
-      paymentDate: downPayment?.date ?? toLocalDateOnly(new Date()),
+      paymentDate: downPayment?.date ?? wibDateOnly(new Date()),
       paymentMethod: "",
       notes: downPayment?.notes ?? ""}})
 

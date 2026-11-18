@@ -28,7 +28,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 
 // P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
@@ -172,7 +172,7 @@ export function PurchaseOrderForm({
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
       vendorId: order?.vendorId ?? preselectedPR?.vendorId ?? undefined,
-      date: order?.date ?? toLocalDateOnly(new Date()),
+      date: order?.date ?? wibDateOnly(new Date()),
       notes: order?.notes ?? "",
       paymentTerm:
         order?.paymentTerm ??
@@ -269,6 +269,20 @@ export function PurchaseOrderForm({
   const vendorTerm = vendors.find((v) => v.id === watchedVendorId)?.paymentTerm ?? null;
 
   function onSubmit(data: PurchaseOrderInput) {
+    if (
+      poItems.some(
+        (it) =>
+          !Number.isFinite(it.qty) ||
+          it.qty <= 0 ||
+          !Number.isFinite(it.unitPrice) ||
+          it.unitPrice < 0 ||
+          !Number.isFinite(it.discount) ||
+          it.discount < 0,
+      )
+    ) {
+      showError("Kuantitas item harus > 0, harga dan diskon tidak boleh negatif");
+      return;
+    }
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -578,18 +592,21 @@ export function PurchaseOrderForm({
                         type="number"
                         aria-label={`Jumlah baris ${index + 1}`}
                         value={poItem.qty}
-                        onChange={(e) =>
-                          updateItem(index, "qty", Number(e.target.value))
-                        }
-                        className="h-9 w-20 text-xs text-right font-mono tabular-nums"
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          updateItem(index, "qty", Number.isFinite(n) ? Math.max(0, n) : 0);
+                        }}
+                        className="h-11 md:h-9 w-20 text-xs text-right font-mono tabular-nums"
                         min={1}
+                        step="any"
                       />
                     </td>
                     <td className="p-2">
                       <CurrencyInput
                         aria-label={`Harga satuan baris ${index + 1}`}
                         value={poItem.unitPrice}
-                        onChange={(v) => updateItem(index, "unitPrice", v)}
+                        onChange={(v) => updateItem(index, "unitPrice", Math.max(0, v))}
+                        min={0}
                         className="font-mono text-sm tabular-nums text-right"
                       />
                     </td>
@@ -598,11 +615,13 @@ export function PurchaseOrderForm({
                         type="number"
                         aria-label={`Diskon baris ${index + 1}`}
                         value={poItem.discount}
-                        onChange={(e) =>
-                          updateItem(index, "discount", Number(e.target.value))
-                        }
-                        className="h-9 w-24 text-xs text-right font-mono tabular-nums"
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          updateItem(index, "discount", Number.isFinite(n) ? Math.max(0, n) : 0);
+                        }}
+                        className="h-11 md:h-9 w-24 text-xs text-right font-mono tabular-nums"
                         min={0}
+                        step="any"
                       />
                     </td>
                     <td className="p-2 text-right font-mono tabular-nums font-semibold">
@@ -618,7 +637,7 @@ export function PurchaseOrderForm({
                           aria-label={`Hapus baris ${index + 1}`}
                           variant="danger-soft"
                           size="sm"
-                          className="min-h-9 px-2"
+                          className="min-h-11 md:min-h-9 px-2"
                         >
                           <Trash2 className="size-3.5" aria-hidden="true" />
                         </Button>

@@ -3896,7 +3896,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       const description = v.description ?? null;
       const date = wibDateToUtcMidnight(v.date);
       const requestDate = requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null;
-      return tx.purchaseRequest.update({
+      const updated = await tx.purchaseRequest.update({
         where: { id },
         data: {
           slug,
@@ -3916,6 +3916,8 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           },
         },
       });
+      await requestApprovalIfConfigured("PurchaseRequest", updated.id, Number(user.id), tx);
+      return updated;
     });
 
     await logActivity(
@@ -3937,7 +3939,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_purchase_orders");
+    const user = await requirePermission("edit_purchase_orders");
 
     const parsed = parseFormData(purchaseOrderSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -4060,6 +4062,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       if (v.purchaseRequestId) {
         await onPurchaseOrderCreated(updated.id, tx);
       }
+      await requestApprovalIfConfigured("PurchaseOrder", updated.id, Number(user.id), tx);
       return updated;
     });
 
@@ -4984,6 +4987,11 @@ export async function voidVendorBill(id: number) {
       }
       billSlug = fresh.slug;
 
+      const revokedCerts = await tx.withholdingCertificate.findMany({
+        where: { vendorBillId: id, status: "revoked" },
+        select: { id: true },
+      });
+
       await reverseJournalsByReferenceTx(
         tx,
         "VendorBill",
@@ -4991,6 +4999,15 @@ export async function voidVendorBill(id: number) {
         `Pembatalan tagihan vendor #${id}`,
         Number(user.id),
       );
+      if (revokedCerts.length > 0) {
+        await reverseJournalsByReferenceTx(
+          tx,
+          "WithholdingCertificate",
+          revokedCerts.map((c) => c.id),
+          `Pembatalan tagihan vendor #${id}`,
+          Number(user.id),
+        );
+      }
       await tx.vendorBill.update({
         where: { id },
         data: { status: "cancelled" },

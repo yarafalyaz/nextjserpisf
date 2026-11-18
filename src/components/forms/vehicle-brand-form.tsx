@@ -7,6 +7,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string } } = {}) {
   const router = useRouter()
@@ -36,10 +37,10 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
           <Input id="name" name="name" required placeholder="Contoh: Toyota" defaultValue={brand?.name ?? ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : brand?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">{isPending ? "Menyimpan..." : brand?.id ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

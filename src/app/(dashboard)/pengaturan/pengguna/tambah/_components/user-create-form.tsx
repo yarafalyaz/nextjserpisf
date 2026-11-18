@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation"
 import { useTransition, useState } from "react"
 import { createUser } from "@/actions/auth.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface UserCreateFormProps {
   roles: { id: number; name: string }[]
@@ -30,16 +32,18 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const formData = new FormData(e.currentTarget)
-      selectedRoleIds.forEach(id => formData.append("roleIds", id))
-      const result = await createUser(formData)
-      if (result.error) {
-        showError(result.error)
-      } else {
-        showSuccess("Pengguna berhasil ditambahkan!")
-        router.push("/pengaturan/pengguna")
-      }
+      await runUiAction(async () => {
+        selectedRoleIds.forEach(id => formData.append("roleIds", id))
+        const result = await createUser(formData)
+        if (result.error) {
+          showError(result.error)
+        } else {
+          showSuccess("Pengguna berhasil ditambahkan!")
+          router.push("/pengaturan/pengguna")
+        }
+      }, "Gagal menambahkan pengguna")
     })
   }
 
@@ -69,7 +73,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
                     key={role.id}
                     type="button"
                     onClick={() => toggleRole(role.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+                    className={`min-h-11 md:min-h-9 px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-surface border-default hover:border-primary/50 text-foreground"
@@ -83,14 +87,14 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
           </div>
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-8 pt-6 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" variant="ghost" onPress={() => router.back()} isDisabled={isPending} size="lg">
+      <FormActions>
+        <Button className="w-full md:w-auto" type="button" variant="ghost" onPress={() => router.back()} isDisabled={isPending} size="lg">
           Batal
         </Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} size="lg">
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} size="lg">
           {isPending ? "Menyimpan..." : "Simpan Pengguna"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

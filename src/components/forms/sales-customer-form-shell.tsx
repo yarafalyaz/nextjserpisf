@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import type { Control, FieldPath, FieldValues } from "react-hook-form"
 import { CustomerSelectField } from "@/components/forms/customer-select-field"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface SalesCustomerFormShellProps<
   TFieldValues extends FieldValues,
@@ -60,12 +61,12 @@ export function SalesCustomerFormShell<
       </div>
       {afterGrid}
       {creditGatePanel}
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-end flex-wrap gap-2 sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
-        <Button type="submit" isDisabled={isPending} id={submitId} className="w-full sm:w-auto">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} id={submitId} className="w-full md:w-auto">
           {isPending ? "Menyimpan..." : isEditing ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

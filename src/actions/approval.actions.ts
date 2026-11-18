@@ -474,14 +474,13 @@ export async function approveStep(approvalId: number, formData: FormData) {
             if (exp?.isReimbursementClaim) {
               await assertReimbursementApprovalGates(tx as never, exp, approvedBy ?? 0);
               await assertClaimantPayable(tx as never, exp.employeeId);
-            }
-            await onExpenseApprovedSyncPettyCash(
-              approval.referenceId,
-              approvedBy ?? undefined,
-              tx,
-            );
-            if (exp?.isReimbursementClaim) {
               await onReimbursementClaimApproved(
+                approval.referenceId,
+                approvedBy ?? undefined,
+                tx,
+              );
+            } else {
+              await onExpenseApprovedSyncPettyCash(
                 approval.referenceId,
                 approvedBy ?? undefined,
                 tx,

@@ -125,7 +125,7 @@ export function VehicleServiceScheduleForm({
                   type="date"
                   defaultValue={toInputDate(nextServiceDate)}
                   disabled={isPending}
-                  className="h-9 w-full text-xs"
+                  className="h-11 md:h-9 w-full text-xs"
                 />
                 <p className="text-xs text-muted-foreground">
                   Boleh kosong. Tanggal lampau akan langsung terlewat.
@@ -142,7 +142,7 @@ export function VehicleServiceScheduleForm({
                   step="1"
                   defaultValue={nextServiceKm ?? ""}
                   disabled={isPending}
-                  className="h-9 w-full text-xs font-mono tabular-nums"
+                  className="h-11 md:h-9 w-full text-xs font-mono tabular-nums"
                 />
                 <p className="text-xs text-muted-foreground">
                   {lastOdometerKm != null
@@ -164,7 +164,7 @@ export function VehicleServiceScheduleForm({
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" isDisabled={isPending} className="min-h-9">
+              <Button type="submit" isDisabled={isPending} className="min-h-11 md:min-h-9">
                 {isPending ? "Menyimpan…" : "Simpan Jadwal Servis"}
               </Button>
             </div>

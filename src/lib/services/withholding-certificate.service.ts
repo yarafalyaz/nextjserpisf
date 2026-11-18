@@ -40,6 +40,9 @@ import {
 import { taxPeriodFromDate } from "@/lib/tax/tax-invoice"
 import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import { isValidBillingCode, isValidNtpn } from "@/lib/tax/tax-liability"
+import { safeAdd } from "@/lib/utils/math"
+import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
+import { onSalesPaymentUpdated } from "@/lib/hooks/sales-payment.hook"
 
 const SCOPE_ISSUE: IdemScope = "withholding_issue"
 const SCOPE_REVOKE: IdemScope = "withholding_revoke"
@@ -102,6 +105,35 @@ function toRate(value: number): Prisma.Decimal {
 function assertWithholdingTypeActive(type: { code: string; isActive?: boolean | null; deletedAt?: Date | null }) {
   if (type.deletedAt != null) throw definitive(`Jenis PPh "${type.code}" sudah dihapus, tidak bisa dipakai`)
   if (type.isActive === false) throw definitive(`Jenis PPh "${type.code}" nonaktif, tidak bisa dipakai`)
+}
+
+/**
+ * C3: cegah siklus terbit-ulang sesudah bupot sumber dicabut dengan jurnal
+ * pembalikan GL — tanpa penjaga ini, terbit bupot kedua tanpa jurnal baru
+ * lalu cabut lagi menguras akun pajak dan menggandakan AP/AR tanpa batas.
+ */
+async function assertNoPriorRevokedWithholdingJournal(
+  tx: TxClient,
+  sourceFilter: { vendorBillId: number } | { salesPaymentId: number },
+): Promise<void> {
+  const revokedCerts = await tx.withholdingCertificate.findMany({
+    where: { ...sourceFilter, status: "revoked" },
+    select: { id: true },
+  })
+  if (revokedCerts.length === 0) return
+  const priorReversalJournal = await tx.journal.findFirst({
+    where: {
+      referenceType: "WithholdingCertificate",
+      referenceId: { in: revokedCerts.map((c) => c.id) },
+      status: { not: "REVERSED" },
+    },
+    select: { id: true },
+  })
+  if (priorReversalJournal) {
+    throw definitive(
+      "Potongan PPh dokumen sumber ini sudah dicabut beserta jurnal pembalikannya. Tidak dapat menerbitkan bukti potong baru pada dokumen yang sama.",
+    )
+  }
 }
 
 function assertArticle(article: string): WithholdingArticle {
@@ -261,6 +293,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (activeDupe) {
           throw definitive(`Tagihan ini sudah punya bupot aktif "${activeDupe.certificateNumber}", cabut dulu sebelum terbit baru`)
         }
+        await assertNoPriorRevokedWithholdingJournal(tx, { vendorBillId: input.vendorBillId })
         recordedWithholding = { amount: Number(bill.withholdingAmount ?? 0), typeId: bill.withholdingTypeId ?? null }
       }
       if (input.salesPaymentId != null) {
@@ -283,6 +316,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
         if (activeDupe) {
           throw definitive(`Pembayaran ini sudah punya bupot aktif "${activeDupe.certificateNumber}", cabut dulu sebelum terbit baru`)
         }
+        await assertNoPriorRevokedWithholdingJournal(tx, { salesPaymentId: input.salesPaymentId })
         recordedWithholding = { amount: Number(payment.withholdingAmount ?? 0), typeId: payment.withholdingTypeId ?? null }
       }
       // R8-PAJAK-08: jenis nonaktif/terhapus tidak boleh melahirkan bupot.
@@ -434,24 +468,66 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       // membatalkan register (status revoked, tanpa jurnal).
       let sourceHasWithholdingLeg = false
       let sourceWithholdingAmount: number | null = null
+      let lockedBill: {
+        id: number
+        status: string
+        deletedAt: Date | null
+        withholdingAmount: unknown
+        withholdingTypeId: number | null
+        balanceDue: unknown
+        paidAmount: unknown
+      } | null = null
+      let lockedPayment: {
+        id: number
+        status: string
+        withholdingAmount: unknown
+        withholdingTypeId: number | null
+        salesInvoiceId: number
+      } | null = null
       if (cert.direction === "we_withhold" && cert.vendorBillId != null) {
-        const bill = await tx.vendorBill.findUnique({
+        if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${cert.vendorBillId} FOR UPDATE`
+        }
+        lockedBill = await tx.vendorBill.findUnique({
           where: { id: cert.vendorBillId },
-          select: { withholdingAmount: true, withholdingTypeId: true },
+          select: {
+            id: true,
+            status: true,
+            deletedAt: true,
+            withholdingAmount: true,
+            withholdingTypeId: true,
+            balanceDue: true,
+            paidAmount: true,
+          },
         })
-        sourceHasWithholdingLeg = !!bill
-          && Number(bill.withholdingAmount ?? 0) > 0
-          && bill.withholdingTypeId === cert.withholdingTypeId
-        if (bill) sourceWithholdingAmount = Number(bill.withholdingAmount ?? 0)
+        if (lockedBill && (lockedBill.deletedAt != null || lockedBill.status === "cancelled") && Number(lockedBill.withholdingAmount ?? 0) > 0) {
+          throw definitive("Tagihan vendor tertaut sudah batal/terhapus, bupot tidak bisa direvoke dengan jurnal lawan")
+        }
+        sourceHasWithholdingLeg = !!lockedBill
+          && Number(lockedBill.withholdingAmount ?? 0) > 0
+          && lockedBill.withholdingTypeId === cert.withholdingTypeId
+        if (lockedBill) sourceWithholdingAmount = Number(lockedBill.withholdingAmount ?? 0)
       } else if (cert.direction === "withheld_from_us" && cert.salesPaymentId != null) {
-        const payment = await tx.salesPayment.findUnique({
+        if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === "function") {
+          await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${cert.salesPaymentId} FOR UPDATE`
+        }
+        lockedPayment = await tx.salesPayment.findUnique({
           where: { id: cert.salesPaymentId },
-          select: { withholdingAmount: true, withholdingTypeId: true },
+          select: {
+            id: true,
+            status: true,
+            withholdingAmount: true,
+            withholdingTypeId: true,
+            salesInvoiceId: true,
+          },
         })
-        sourceHasWithholdingLeg = !!payment
-          && Number(payment.withholdingAmount ?? 0) > 0
-          && payment.withholdingTypeId === cert.withholdingTypeId
-        if (payment) sourceWithholdingAmount = Number(payment.withholdingAmount ?? 0)
+        if (lockedPayment && lockedPayment.status === "reversed" && Number(lockedPayment.withholdingAmount ?? 0) > 0) {
+          throw definitive("Pembayaran tertaut sudah dibalik, bupot tidak bisa direvoke dengan jurnal lawan")
+        }
+        sourceHasWithholdingLeg = !!lockedPayment
+          && Number(lockedPayment.withholdingAmount ?? 0) > 0
+          && lockedPayment.withholdingTypeId === cert.withholdingTypeId
+        if (lockedPayment) sourceWithholdingAmount = Number(lockedPayment.withholdingAmount ?? 0)
       }
       await assertPeriodOpen(cert.withholdingDate, tx as never)
       const amount = Number(cert.withheldAmount)
@@ -548,6 +624,39 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
           },
         },
       })
+      // C3: selaraskan subledger dokumen sumber dengan jurnal pembalikan di atas
+      // agar AP/AR subledger, laporan Bukti Potong, dan pelunasan faktur tetap
+      // konsisten dengan GL, sekaligus mencegah revoke berulang dari dokumen sama.
+      if (lockedBill) {
+        const nextBalanceDue = safeAdd(Number(lockedBill.balanceDue ?? 0), amount, 2)
+        const paid = Number(lockedBill.paidAmount ?? 0)
+        const nextStatus =
+          lockedBill.status === "paid" && nextBalanceDue > SETTLEMENT_TOLERANCE_IDR
+            ? (paid > 0 ? "partial" : "posted")
+            : lockedBill.status
+        await tx.vendorBill.update({
+          where: { id: lockedBill.id },
+          data: {
+            withholdingAmount: toMoney(0),
+            withholdingTypeId: null,
+            balanceDue: toMoney(nextBalanceDue),
+            ...(nextStatus !== lockedBill.status ? { status: nextStatus } : {}),
+          },
+        })
+      } else if (lockedPayment) {
+        await tx.salesPayment.update({
+          where: { id: lockedPayment.id },
+          data: {
+            withholdingAmount: toMoney(0),
+            withholdingTypeId: null,
+            withholdingCertificateNo: null,
+            withholdingDate: null,
+          },
+        })
+        if (lockedPayment.salesInvoiceId) {
+          await onSalesPaymentUpdated(lockedPayment.salesInvoiceId, tx as never)
+        }
+      }
       await bindIdempotencyKey(tx as never, input.idempotencyKey, "WithholdingCertificate", cert.id)
     })
     return { success: true, replayed: isReplay, id: input.id }

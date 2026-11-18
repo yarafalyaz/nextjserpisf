@@ -12,7 +12,8 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { FormActions } from "@/components/ui/form-section"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface TransferFormProps {
@@ -67,7 +68,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         const formData = new FormData()
         formData.append("sourceWarehouseId", sourceId)
         formData.append("destinationWarehouseId", destId)
-        formData.append("date", transfer?.date ?? toLocalDateOnly(new Date()))
+        formData.append("date", transfer?.date ?? wibDateOnly(new Date()))
         if (notes) formData.append("notes", notes)
         formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0).map(({ uid: _uid, ...rest }) => rest)))
         if (!transfer?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
@@ -160,10 +161,10 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" className="w-full md:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full md:w-auto" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
+      </FormActions>
     </form>
   )
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { importBankStatementLines } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -32,18 +33,20 @@ export function BankStatementImportForm({
     const form = e.currentTarget
     setRowErrors([])
     startTransition(async () => {
-      const fd = new FormData(form)
-      fd.set("idempotencyKey", idempotencyKeyRef.current!)
-      const res = await importBankStatementLines(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal mengimpor rekening koran")
-        if ("rowErrors" in res && res.rowErrors) setRowErrors(res.rowErrors)
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(`${res.imported} baris rekening koran diimpor`)
-      router.push(baseHref)
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        fd.set("idempotencyKey", idempotencyKeyRef.current!)
+        const res = await importBankStatementLines(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal mengimpor rekening koran")
+          if ("rowErrors" in res && res.rowErrors) setRowErrors(res.rowErrors)
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(`${res.imported} baris rekening koran diimpor`)
+        router.push(baseHref)
+        router.refresh()
+      }, "Gagal mengimpor rekening koran")
     })
   }
 

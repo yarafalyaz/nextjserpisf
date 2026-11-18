@@ -9,6 +9,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { deleteRecurringTransaction, runAllDueRecurring, runRecurringNow } from "@/actions/recurring.actions"
 import { describeSchedule, type RecurrenceFrequency } from "@/lib/reports/recurring-schedule"
 
@@ -36,23 +37,30 @@ export function RecurringTransactionTable({ data }: { data: RecurringRow[] }) {
   function runNow(row: RecurringRow) {
     setRunningId(row.id)
     startTransition(async () => {
-      const result = await runRecurringNow(row.id)
-      setRunningId(null)
-      if (result.success) showSuccess(`Dokumen dibuat: ${result.message}`)
-      else showError(result.error ?? "Gagal menjalankan jadwal")
+      await runUiAction(
+        async () => {
+          const result = await runRecurringNow(row.id)
+          if (result.success) showSuccess(`Dokumen dibuat: ${result.message}`)
+          else showError(result.error ?? "Gagal menjalankan jadwal")
+        },
+        "Gagal menjalankan jadwal",
+        () => setRunningId(null),
+      )
     })
   }
 
   function runAllDue() {
     startTransition(async () => {
-      const result = await runAllDueRecurring()
-      if (!result.success) {
-        showError(result.error ?? "Gagal menjalankan jadwal")
-        return
-      }
-      const generated = result.generated?.length ?? 0
-      const errors = result.errors?.length ?? 0
-      showSuccess(`${generated} dokumen dibuat${errors ? `, ${errors} jadwal gagal (lihat kolom Hasil Terakhir)` : ""}`)
+      await runUiAction(async () => {
+        const result = await runAllDueRecurring()
+        if (!result.success) {
+          showError(result.error ?? "Gagal menjalankan jadwal")
+          return
+        }
+        const generated = result.generated?.length ?? 0
+        const errors = result.errors?.length ?? 0
+        showSuccess(`${generated} dokumen dibuat${errors ? `, ${errors} jadwal gagal (lihat kolom Hasil Terakhir)` : ""}`)
+      }, "Gagal menjalankan jadwal")
     })
   }
 

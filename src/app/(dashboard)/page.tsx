@@ -349,7 +349,7 @@ export default async function DashboardPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {canViewReports && (
-                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Button asChild variant="outline" size="sm" className="min-h-11 md:min-h-8 md:h-8 gap-1.5 text-xs">
                   <Link href="/laporan/laba-rugi">
                     <TrendingUp className="size-3.5 shrink-0" aria-hidden="true" />
                     Laporan
@@ -357,7 +357,7 @@ export default async function DashboardPage() {
                 </Button>
               )}
               <CanCreate permission="create_sales_invoices">
-                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Button asChild variant="outline" size="sm" className="min-h-11 md:min-h-8 md:h-8 gap-1.5 text-xs">
                   <Link href="/penjualan/faktur/tambah">
                     <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
                     Buat Faktur
@@ -365,7 +365,7 @@ export default async function DashboardPage() {
                 </Button>
               </CanCreate>
               <CanCreate permission="create_projects">
-                <Button asChild size="sm" className="h-8 gap-1.5 text-xs">
+                <Button asChild size="sm" className="min-h-11 md:min-h-8 md:h-8 gap-1.5 text-xs">
                   <Link href="/proyek/tambah">
                     <Plus className="size-3.5 shrink-0" aria-hidden="true" />
                     Proyek Baru
@@ -425,7 +425,7 @@ export default async function DashboardPage() {
                   Proyek kendaraan aktif dan progres tahap pengerjaan saat ini
                 </CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/proyek">
                       Semua <span className="hidden md:inline">Proyek</span> <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
@@ -605,7 +605,7 @@ export default async function DashboardPage() {
                 </CardTitle>
                 <CardDescription className="hidden md:block">Barang di bawah batas minimum stok</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/master/barang/stokmenipis">
                       Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
@@ -674,7 +674,7 @@ export default async function DashboardPage() {
                   6 penerimaan pembayaran faktur terakhir
                 </CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/penjualan/pembayaran">
                       Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>

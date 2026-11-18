@@ -75,7 +75,22 @@ describe("buildAssetDisposalEntries", () => {
   it("rounds fractional rupiah without breaking balance", () => {
     const entries = buildAssetDisposalEntries({ grossCost: 1_000_000.33, bookValue: 333_333.33, proceeds: 200_000.5, assetName: "Pompa", accounts })
     const { debit, credit } = sum(entries)
-    expect(Math.abs(debit - credit)).toBeLessThanOrEqual(0.01)
+    expect(Math.round(debit * 100)).toBe(Math.round(credit * 100))
+  })
+
+  it("M1: half-cent inputs round coherently in integer sen with zero debit-credit drift", () => {
+    // Prior float rounding produced accumDep = 66.67 and loss = 0.01 -> D=100.01 vs K=100.00.
+    const entries = buildAssetDisposalEntries({
+      grossCost: 100.0,
+      bookValue: 33.335,
+      proceeds: 33.33,
+      assetName: "Alat",
+      accounts,
+    })
+    const { debit, credit } = sum(entries)
+    expect(Math.round(debit * 100)).toBe(Math.round(credit * 100))
+    expect(debit).toBe(100)
+    expect(credit).toBe(100)
   })
 
   it("regresi putaran 15: disposal membalik kontra impairment terpisah dari akumulasi penyusutan", () => {

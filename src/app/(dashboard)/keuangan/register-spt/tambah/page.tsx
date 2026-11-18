@@ -5,7 +5,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getSptFilingRegisterData } from "@/lib/reports/spt-filing-data"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { SptFilingForm } from "../_components/spt-filing-form"
 
 export const metadata: Metadata = { title: "Catat Lapor SPT" }
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Catat Lapor SPT" }
 export default async function CreateSptFilingPage() {
   await requirePermission("create_spt_filings")
   const data = await getSptFilingRegisterData()
-  const today = toLocalDateOnly(new Date())
+  const today = wibDateOnly(new Date())
   const defaultPeriod = today.slice(0, 7)
 
   return (

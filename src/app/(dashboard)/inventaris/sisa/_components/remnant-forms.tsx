@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useRef, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
@@ -27,17 +28,19 @@ export function RemnantForm({ canCreate }: { canCreate: boolean }) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const formData = new FormData(form)
-      formData.set("idempotencyKey", idempotencyKeyRef.current)
-      const res = await createRemnant(formData)
-      if (!res.success) {
-        showError(res.error || "Gagal mencatat sisa")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Sisa dicatat")
-      form.reset()
-      router.refresh()
+      await runUiAction(async () => {
+        const formData = new FormData(form)
+        formData.set("idempotencyKey", idempotencyKeyRef.current)
+        const res = await createRemnant(formData)
+        if (!res.success) {
+          showError(res.error || "Gagal mencatat sisa")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Sisa dicatat")
+        form.reset()
+        router.refresh()
+      }, "Gagal mencatat sisa")
     })
   }
 
@@ -112,13 +115,15 @@ export function ConsumeRemnantForm({ id, canCreate }: { id: number; canCreate: b
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await consumeRemnant(id, new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal memakai sisa")
-        return
-      }
-      showSuccess("Sisa dipakai")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await consumeRemnant(id, new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal memakai sisa")
+          return
+        }
+        showSuccess("Sisa dipakai")
+        router.refresh()
+      }, "Gagal memakai sisa")
     })
   }
 
@@ -143,13 +148,15 @@ export function ScrapRemnantForm({ id, canCreate }: { id: number; canCreate: boo
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await scrapRemnant(id, new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal scrap")
-        return
-      }
-      showSuccess("Sisa di-scrap")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await scrapRemnant(id, new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal scrap")
+          return
+        }
+        showSuccess("Sisa di-scrap")
+        router.refresh()
+      }, "Gagal scrap")
     })
   }
 

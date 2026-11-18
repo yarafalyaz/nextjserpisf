@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/shadcn/select"
 import { statusLabel } from "@/lib/utils/status-labels"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 type RevenueData = { date: string; lunas: number; tagihan: number }
 type StatusData = { name: string; value: number }
@@ -59,6 +60,7 @@ function formatDayLabel(date: string) {
   return new Date(date).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "short",
+    timeZone: "Asia/Jakarta",
   })
 }
 function formatChartDateLabel(value: React.ReactNode) {
@@ -149,7 +151,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
     // data terakhir) membuat grafik berhenti di transaksi terakhir dan
     // menyembunyikan kekosongan penjualan sesudahnya.
     const refDate = new Date()
-    refDate.setHours(0, 0, 0, 0)
+    const [refYear, refMonth, refDay] = wibDateOnly(refDate).split("-").map(Number)
 
     const dataMap = new Map<string, { lunas: number; tagihan: number }>()
     for (const item of data) {
@@ -164,12 +166,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
 
     const result: RevenueData[] = []
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(refDate)
-      d.setDate(d.getDate() - i)
-      const year = d.getFullYear()
-      const month = String(d.getMonth() + 1).padStart(2, "0")
-      const day = String(d.getDate()).padStart(2, "0")
-      const dateKey = `${year}-${month}-${day}`
+      const dateKey = wibDateOnly(new Date(Date.UTC(refYear, refMonth - 1, refDay - i)))
 
       const val = dataMap.get(dateKey) || { lunas: 0, tagihan: 0 }
       result.push({

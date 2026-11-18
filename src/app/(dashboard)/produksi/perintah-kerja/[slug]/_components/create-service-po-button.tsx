@@ -102,8 +102,8 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
           />
         </div>
 
-        <div className="rounded-lg border border-default bg-muted/30 p-3">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-default bg-muted/30 p-3">
+          <table className="w-full min-w-[320px] text-sm">
             <thead>
               <tr className="text-muted-foreground text-xs">
                 <th className="text-left font-medium">Barang Jasa</th>
@@ -115,7 +115,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
               {serviceItems.map((it) => (
                 <tr key={it.itemId}>
                   <td className="py-0.5">{it.name}</td>
-                  <td className="py-0.5 text-right">{it.qty}</td>
+                  <td className="py-0.5 text-right font-mono tabular-nums">{it.qty}</td>
                   <td className="py-0.5 text-right font-mono tabular-nums">{formatCurrencyExact(it.cost)}
                   </td>
                 </tr>
@@ -130,7 +130,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground font-mono tabular-nums">
             Total: {formatCurrencyExact(total)}
           </span>
           <div className="flex gap-2">

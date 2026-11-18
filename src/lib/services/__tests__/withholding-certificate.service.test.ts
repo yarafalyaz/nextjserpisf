@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const certFindFirst = vi.fn()
+  const certFindMany = vi.fn(async () => [])
   const certCreate = vi.fn()
   const certFindUniqueOrThrow = vi.fn()
   const certUpdate = vi.fn()
@@ -16,35 +17,41 @@ const mocks = vi.hoisted(() => {
   const accountFindMany = vi.fn()
   const taxPaymentCreate = vi.fn()
   const taxPaymentUpdate = vi.fn()
+  const journalFindFirst = vi.fn(async () => null)
   const journalCreate = vi.fn()
   const claimIdempotencyKey = vi.fn()
   const bindIdempotencyKey = vi.fn()
   const assertPeriodOpen = vi.fn()
   const reverseJournals = vi.fn()
+  const onSalesPaymentUpdated = vi.fn(async (..._a: unknown[]) => undefined)
   const queryRaw = vi.fn()
   const executeRaw = vi.fn()
 
   const systemSettingFindFirst = vi.fn()
-  const billFindUnique = vi.fn(async () => ({
+  const billFindUnique = vi.fn(async (): Promise<Record<string, unknown>> => ({
     id: 42, status: "posted", deletedAt: null,
     withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-001",
+    balanceDue: 9_800_000, paidAmount: 0,
   }))
-  const paymentFindUnique = vi.fn(async () => ({
-    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3,
+  const billUpdate = vi.fn(async () => ({}))
+  const paymentFindUnique = vi.fn(async (): Promise<Record<string, unknown>> => ({
+    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3, salesInvoiceId: 77,
   }))
+  const paymentUpdate = vi.fn(async () => ({}))
   const tx: Record<string, unknown> = {
     withholdingCertificate: {
       findFirst: certFindFirst,
+      findMany: certFindMany,
       create: certCreate,
       findUniqueOrThrow: certFindUniqueOrThrow,
       update: certUpdate,
     },
-    vendorBill: { findUnique: billFindUnique },
-    salesPayment: { findUnique: paymentFindUnique },
+    vendorBill: { findUnique: billFindUnique, update: billUpdate },
+    salesPayment: { findUnique: paymentFindUnique, update: paymentUpdate },
     withholdingTaxType: { findUniqueOrThrow: typeFindUniqueOrThrow, findMany: typeFindMany },
     account: { findMany: accountFindMany },
     taxPayment: { findFirst: vi.fn(async () => null), create: taxPaymentCreate, update: taxPaymentUpdate },
-    journal: { findFirst: vi.fn(async () => null), create: journalCreate },
+    journal: { findFirst: journalFindFirst, create: journalCreate },
     systemSetting: { findFirst: systemSettingFindFirst },
     $queryRaw: queryRaw,
     $executeRaw: executeRaw,
@@ -53,11 +60,11 @@ const mocks = vi.hoisted(() => {
     $transaction: (fn: (tx: unknown) => unknown) => fn(tx),
   }
   return {
-    certFindFirst, certCreate, certFindUniqueOrThrow, certUpdate,
+    certFindFirst, certFindMany, certCreate, certFindUniqueOrThrow, certUpdate,
     typeFindUniqueOrThrow, typeFindMany, accountFindMany, taxPaymentCreate, taxPaymentUpdate,
-    journalCreate, claimIdempotencyKey, bindIdempotencyKey, assertPeriodOpen,
-    reverseJournals, queryRaw, executeRaw, prisma, systemSettingFindFirst,
-    billFindUnique, paymentFindUnique,
+    journalFindFirst, journalCreate, claimIdempotencyKey, bindIdempotencyKey, assertPeriodOpen,
+    reverseJournals, onSalesPaymentUpdated, queryRaw, executeRaw, prisma, systemSettingFindFirst,
+    billFindUnique, billUpdate, paymentFindUnique, paymentUpdate,
   }
 })
 
@@ -73,6 +80,9 @@ vi.mock("@/lib/services/financial-idempotency.service", async (importOriginal) =
 })
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   reverseJournalsByReferenceTx: (...a: unknown[]) => mocks.reverseJournals(...a),
+}))
+vi.mock("@/lib/hooks/sales-payment.hook", () => ({
+  onSalesPaymentUpdated: (...a: unknown[]) => mocks.onSalesPaymentUpdated(...a),
 }))
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: vi.fn(async (prefix: string) => `${prefix}-0001`),
@@ -97,6 +107,11 @@ beforeEach(() => {
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
   mocks.queryRaw.mockResolvedValue([{ id: 1 }])
   mocks.certFindFirst.mockResolvedValue(null)
+  mocks.certFindMany.mockResolvedValue([])
+  mocks.journalFindFirst.mockResolvedValue(null)
+  mocks.onSalesPaymentUpdated.mockResolvedValue(undefined)
+  mocks.billUpdate.mockResolvedValue({})
+  mocks.paymentUpdate.mockResolvedValue({})
   mocks.certCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: 7, ...data }),
   )
@@ -135,9 +150,10 @@ beforeEach(() => {
   mocks.billFindUnique.mockResolvedValue({
     id: 42, status: "posted", deletedAt: null,
     withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-001",
+    balanceDue: 9_800_000, paidAmount: 0,
   })
   mocks.paymentFindUnique.mockResolvedValue({
-    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3,
+    id: 88, status: "posted", withholdingAmount: 200_000, withholdingTypeId: 3, salesInvoiceId: 77,
   })
 })
 
@@ -577,12 +593,95 @@ describe("revokeWithholdingCertificate tanpa kaki sumber (putaran 22)", () => {
     mocks.billFindUnique.mockResolvedValue({
       id: 42, status: "posted", deletedAt: null,
       withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-OK-1",
+      balanceDue: 9_800_000, paidAmount: 0,
     })
     const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
     expect(r.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
     const journal = mocks.journalCreate.mock.calls[0][0].data
     expect(journal.referenceType).toBe("WithholdingCertificate")
+  })
+
+  it("C3: revoke we_withhold meng-nol-kan withholdingAmount & menambah balanceDue VendorBill, dan menolak re-issue pasca-revoke", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 16, status: "issued", direction: "we_withhold", certificateNumber: "BP-C3",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 200_000,
+      vendorBillId: 42, salesPaymentId: null,
+    })
+    mocks.billFindUnique.mockResolvedValue({
+      id: 42, status: "paid", deletedAt: null,
+      withholdingAmount: 200_000, withholdingTypeId: 3, documentNo: "VB-C3",
+      balanceDue: 0, paidAmount: 9_800_000,
+    })
+    const rev = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(rev.success).toBe(true)
+    expect(mocks.billUpdate).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: expect.objectContaining({
+        withholdingTypeId: null,
+        status: "partial",
+      }),
+    })
+    const billUpdateData = (mocks.billUpdate.mock.calls as unknown[][])[0][0] as {
+      data: { withholdingAmount: unknown; balanceDue: unknown }
+    }
+    expect(Number(billUpdateData.data.withholdingAmount)).toBe(0)
+    expect(Number(billUpdateData.data.balanceDue)).toBe(200_000)
+
+    // Simulasikan state pasca-revoke: bill.withholdingAmount=0, ada cert revoked & jurnal pembalikan POSTED
+    mocks.billFindUnique.mockResolvedValue({
+      id: 42, status: "partial", deletedAt: null,
+      withholdingAmount: 0, withholdingTypeId: null as unknown as number, documentNo: "VB-C3",
+      balanceDue: 200_000, paidAmount: 9_800_000,
+    })
+    mocks.certFindMany.mockResolvedValue([{ id: 16 }] as never)
+    mocks.journalFindFirst.mockResolvedValue({ id: 99 } as never)
+    const reissue = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-C3-2",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Maklon",
+      withholdingTypeId: 3, dpp: 10_000_000, vendorBillId: 42, idempotencyKey: key(),
+    })
+    expect(reissue.success).toBe(false)
+    expect(String(reissue.error)).toMatch(/sudah dicabut/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("C3: revoke withheld_from_us meng-nol-kan withholdingAmount SalesPayment + recalc faktur, dan menolak re-issue pasca-revoke", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      id: 26, status: "issued", direction: "withheld_from_us", certificateNumber: "BP-SP-1",
+      withholdingDate: new Date(2026, 0, 10), withholdingTypeId: 3, withheldAmount: 200_000,
+      vendorBillId: null, salesPaymentId: 88,
+    })
+    const rev = await revokeWithholdingCertificate({ id: 26, idempotencyKey: key(), userId: 5 })
+    expect(rev.success).toBe(true)
+    expect(mocks.paymentUpdate).toHaveBeenCalledWith({
+      where: { id: 88 },
+      data: expect.objectContaining({
+        withholdingTypeId: null,
+        withholdingCertificateNo: null,
+        withholdingDate: null,
+      }),
+    })
+    const payUpdateData = (mocks.paymentUpdate.mock.calls as unknown[][])[0][0] as {
+      data: { withholdingAmount: unknown }
+    }
+    expect(Number(payUpdateData.data.withholdingAmount)).toBe(0)
+    expect(mocks.onSalesPaymentUpdated).toHaveBeenCalledWith(77, expect.anything())
+
+    // Simulasikan state pasca-revoke: payment.withholdingAmount=0, ada cert revoked & jurnal pembalikan POSTED
+    mocks.paymentFindUnique.mockResolvedValue({
+      id: 88, status: "posted", withholdingAmount: 0, withholdingTypeId: null as unknown as number, salesInvoiceId: 77,
+    })
+    mocks.certFindMany.mockResolvedValue([{ id: 26 }] as never)
+    mocks.journalFindFirst.mockResolvedValue({ id: 100 } as never)
+    const reissue = await issueWithholdingCertificate({
+      direction: "withheld_from_us", certificateNumber: "BP-SP-2",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Langganan",
+      withholdingTypeId: 3, dpp: 10_000_000, salesPaymentId: 88, idempotencyKey: key(),
+    })
+    expect(reissue.success).toBe(false)
+    expect(String(reissue.error)).toMatch(/sudah dicabut/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 })
 

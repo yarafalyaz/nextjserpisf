@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 const RESULT_OPTIONS = [
   { value: "DIKABULKAN", label: "Dikabulkan" },
@@ -31,7 +31,7 @@ export function TaxDisputeDecisionForm({
 
   const [stepId, setStepId] = useState("")
   const [result, setResult] = useState("")
-  const [decidedAtInput, setDecidedAtInput] = useState(toLocalDateOnly(new Date()))
+  const [decidedAtInput, setDecidedAtInput] = useState(wibDateOnly(new Date()))
   const [decidedAmount, setDecidedAmount] = useState<number | null>(null)
   const [decisionNotes, setDecisionNotes] = useState("")
 
@@ -55,7 +55,7 @@ export function TaxDisputeDecisionForm({
         idempotencyKeyRef.current = crypto.randomUUID()
         setStepId("")
         setResult("")
-        setDecidedAtInput(toLocalDateOnly(new Date()))
+        setDecidedAtInput(wibDateOnly(new Date()))
         setDecidedAmount(null)
         setDecisionNotes("")
         showSuccess("Putusan sengketa tercatat")

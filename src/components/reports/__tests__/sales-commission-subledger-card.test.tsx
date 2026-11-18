@@ -159,7 +159,7 @@ describe("SalesCommissionSubledgerCard F-2026-10-25-049-S", () => {
     const text = container.textContent ?? ""
     expect(view.payable.reconciliations.length).toBeGreaterThan(0)
     expect(text).toContain("Baris Rekonsiliasi")
-    expect(text).toContain("Saldo negatif — retur sesudah komisi terbayar")
+    expect(text).toContain("Saldo negatif: retur sesudah komisi terbayar")
     unmountCard(root)
   })
 

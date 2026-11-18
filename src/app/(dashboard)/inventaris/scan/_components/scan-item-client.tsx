@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
 import { showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 
 
 export default function ScanItemPage() {
@@ -23,14 +24,16 @@ export default function ScanItemPage() {
     if (!v) return
     setNotFound(null)
     startTransition(async () => {
-      const res = await lookupItemByScan(v)
-      if (res.success && (res.slug || res.id)) {
-        router.push(`/master/barang/${res.slug ?? res.id}`)
-      } else {
-        setNotFound(res.error || "Barang tidak ditemukan")
-        showError(res.error || "Barang tidak ditemukan")
-        setCode("")
-      }
+      await runUiAction(async () => {
+        const res = await lookupItemByScan(v)
+        if (res.success && (res.slug || res.id)) {
+          router.push(`/master/barang/${res.slug ?? res.id}`)
+        } else {
+          setNotFound(res.error || "Barang tidak ditemukan")
+          showError(res.error || "Barang tidak ditemukan")
+          setCode("")
+        }
+      }, "Gagal mencari barang")
     })
   }
 
@@ -41,13 +44,15 @@ export default function ScanItemPage() {
     const param = new URLSearchParams(window.location.search).get("code")
     if (!param) return
     startTransition(async () => {
-      const res = await lookupItemByScan(param)
-      if (res.success && (res.slug || res.id)) {
-        router.push(`/master/barang/${res.slug ?? res.id}`)
-      } else {
-        setNotFound(res.error || "Barang tidak ditemukan")
-        showError(res.error || "Barang tidak ditemukan")
-      }
+      await runUiAction(async () => {
+        const res = await lookupItemByScan(param)
+        if (res.success && (res.slug || res.id)) {
+          router.push(`/master/barang/${res.slug ?? res.id}`)
+        } else {
+          setNotFound(res.error || "Barang tidak ditemukan")
+          showError(res.error || "Barang tidak ditemukan")
+        }
+      }, "Gagal mencari barang")
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

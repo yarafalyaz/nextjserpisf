@@ -142,7 +142,7 @@ export default async function RosterPage({
             </label>
             <button
               type="submit"
-              className="inline-flex items-center justify-center min-h-9 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
+              className="inline-flex items-center justify-center min-h-11 md:min-h-9 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-2xs cursor-pointer"
             >
               Filter
             </button>

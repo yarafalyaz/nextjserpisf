@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 type MethodRecord = { id: number; code: string; name: string; isActive: boolean }
 type MethodAction = (formData: FormData) => Promise<{ success: boolean; error?: string } | void>
@@ -73,10 +74,10 @@ export function MethodForm({ config, method, generatedCode, enableAutoCode = tru
           </div>
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()}>Batal</Button>
-        <Button type="submit" isDisabled={isPending}>{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

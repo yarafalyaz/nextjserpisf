@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { createBankStatementLine, updateBankStatementLine } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
@@ -62,28 +63,30 @@ export function BankStatementLineForm({
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      if (!line) fd.set("idempotencyKey", idempotencyKeyRef.current)
-      const res = line
-        ? await updateBankStatementLine(line.id, fd)
-        : await createBankStatementLine(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan baris rekening koran")
-        return
-      }
-      if (!line) idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(
-        line ? "Baris rekening koran diperbarui" : "Baris rekening koran ditambahkan",
-      )
-      if (line) {
-        // Kembali ke mode tambah: parameter `?editBaris=` dilepas, dan `key` pada
-        // form berubah sehingga form di-mount ulang (tidak menyimpan sisa isian).
-        router.push(baseHref)
-      } else {
-        form.reset()
-        setAmount(0)
-      }
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        if (!line) fd.set("idempotencyKey", idempotencyKeyRef.current)
+        const res = line
+          ? await updateBankStatementLine(line.id, fd)
+          : await createBankStatementLine(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan baris rekening koran")
+          return
+        }
+        if (!line) idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(
+          line ? "Baris rekening koran diperbarui" : "Baris rekening koran ditambahkan",
+        )
+        if (line) {
+          // Kembali ke mode tambah: parameter `?editBaris=` dilepas, dan `key` pada
+          // form berubah sehingga form di-mount ulang (tidak menyimpan sisa isian).
+          router.push(baseHref)
+        } else {
+          form.reset()
+          setAmount(0)
+        }
+        router.refresh()
+      }, "Gagal menyimpan baris rekening koran")
     })
   }
 

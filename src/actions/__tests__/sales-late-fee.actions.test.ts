@@ -592,4 +592,62 @@ describe("createCustomerLateFeeTerm (P2a)", () => {
     )
     expect(mocks.bindMock).toHaveBeenCalledWith(expect.anything(), "latefee-term-0001", "CustomerLateFeeTerm", 7)
   })
+
+  it("M3: rejects non-empty malformed dates instead of falling back to null or today", async () => {
+    const badFrom = await actions.createCustomerLateFeeTerm(
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveFrom: "2026-02-30",
+        idempotencyKey: "latefee-term-bad-date",
+      }),
+    )
+    expect(badFrom.success).toBe(false)
+    expect(String(badFrom.error)).toContain("Format tanggal tidak valid")
+
+    const badTo = await actions.createCustomerLateFeeTerm(
+      fd({
+        customerId: "3",
+        ratePercentPerDay: "0.1",
+        effectiveTo: "not-a-date",
+        idempotencyKey: "latefee-term-bad-date-2",
+      }),
+    )
+    expect(badTo.success).toBe(false)
+    expect(String(badTo.error)).toContain("Format tanggal tidak valid")
+
+    const badIssue = await actions.issueSalesLateFee(
+      fd({
+        salesInvoiceId: "10",
+        termId: "2",
+        date: "2026-02-30",
+        idempotencyKey: "latefee-issue-bad-date",
+      }),
+    )
+    expect(badIssue.success).toBe(false)
+    expect(String(badIssue.error)).toContain("Format tanggal tidak valid")
+
+    const badPay = await actions.paySalesLateFee(
+      fd({
+        salesLateFeeId: "10",
+        amount: "5000",
+        paymentMethod: "cash",
+        paymentDate: "2026-13-01",
+        idempotencyKey: "latefee-pay-bad-date",
+      }),
+    )
+    expect(badPay.success).toBe(false)
+    expect(String(badPay.error)).toContain("Format tanggal tidak valid")
+
+    const badReverse = await actions.reverseSalesLateFee(
+      fd({
+        salesLateFeeId: "10",
+        reason: "Batal",
+        date: "2026-02-30",
+        idempotencyKey: "latefee-rev-bad-date",
+      }),
+    )
+    expect(badReverse.success).toBe(false)
+    expect(String(badReverse.error)).toContain("Format tanggal tidak valid")
+  })
 })

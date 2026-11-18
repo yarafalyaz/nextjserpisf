@@ -6,6 +6,7 @@ import { CheckCircle2 } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { completeReconciliation } from "@/actions/finance.actions"
 
 /** Complete-reconciliation button. Server enforces all-matched + |difference|<0.01. */
@@ -16,15 +17,19 @@ export function CompleteReconciliationButton({ reconciliationId }: { reconciliat
 
   function doComplete() {
     startTransition(async () => {
-      const res = await completeReconciliation(reconciliationId)
-      if (!res.success) {
-        showError(res.error || "Gagal menyelesaikan rekonsiliasi")
-        setOpen(false)
-        return
-      }
-      showSuccess("Rekonsiliasi diselesaikan")
-      setOpen(false)
-      router.refresh()
+      await runUiAction(
+        async () => {
+          const res = await completeReconciliation(reconciliationId)
+          if (!res.success) {
+            showError(res.error || "Gagal menyelesaikan rekonsiliasi")
+            return
+          }
+          showSuccess("Rekonsiliasi diselesaikan")
+          router.refresh()
+        },
+        "Gagal menyelesaikan rekonsiliasi",
+        () => setOpen(false),
+      )
     })
   }
 

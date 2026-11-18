@@ -128,8 +128,9 @@ export function NotificationDropdown() {
 
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <div role="status" className="flex items-center justify-center py-8">
+                <div aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="sr-only">Memuat notifikasi...</span>
               </div>
             ) : loadFailed ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
@@ -148,7 +149,6 @@ export function NotificationDropdown() {
                 <button
                   key={notif.id}
                   type="button"
-                  aria-disabled={notif.readAt ? true : undefined}
                   className={`flex w-full cursor-pointer gap-3 border-b border-border px-4 py-2.5 text-left transition-colors duration-150 last:border-0 hover:bg-muted/60 ${!notif.readAt ? "bg-muted/30" : ""}`}
                   onClick={() => {
                     if (!notif.readAt) void markAsRead(notif.id)

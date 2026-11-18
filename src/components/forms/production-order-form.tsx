@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface ProductionOrderFormProps {
@@ -104,12 +105,12 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan produksi..." defaultValue={order?.notes ?? ""} />
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
-        <Button type="submit" isDisabled={isPending} id="submit-production-order" className="w-full sm:w-auto">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} id="submit-production-order" className="w-full md:w-auto">
           {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

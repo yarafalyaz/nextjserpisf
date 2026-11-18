@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 
 /**
  * Plumbing bersama tombol konfirmasi beralasan (VoidButton,
@@ -32,17 +33,19 @@ export function useConfirmReasonAction({
 
   function submit() {
     startTransition(async () => {
-      const result = await run(reason.trim())
-      if (result.success) {
-        showSuccess(successMessage)
-        setIsOpen(false)
-        setReason("")
-        onSuccess?.()
-        router.refresh()
-      } else {
-        showError(result.error || errorFallback)
-        setIsOpen(false)
-      }
+      await runUiAction(async () => {
+        const result = await run(reason.trim())
+        if (result.success) {
+          showSuccess(successMessage)
+          setIsOpen(false)
+          setReason("")
+          onSuccess?.()
+          router.refresh()
+        } else {
+          showError(result.error || errorFallback)
+          setIsOpen(false)
+        }
+      }, errorFallback)
     })
   }
 

@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
+import { runUiAction } from "@/components/ui/async-action"
 
 
 export default function CreateTaxPage() {
@@ -21,15 +23,25 @@ export default function CreateTaxPage() {
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
-      const result = await createTax(formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
+    const rawRate = String(formData.get("rate") ?? "").trim()
+    if (rawRate !== "") {
+      const rate = Number(rawRate)
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        showError("Tarif pajak harus antara 0% dan 100%")
         return
       }
-      showSuccess("Pajak berhasil ditambahkan")
-      router.push("/master/pajak")
-      router.refresh()
+    }
+    startTransition(async () => {
+      await runUiAction(async () => {
+        const result = await createTax(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Pajak berhasil ditambahkan")
+        router.push("/master/pajak")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -53,7 +65,7 @@ export default function CreateTaxPage() {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="tax-rate">Tarif (%)</Label>
-            <Input id="tax-rate" name="rate" type="number" step="0.01" placeholder="Contoh: 11" required className="w-full" />
+            <Input id="tax-rate" name="rate" type="number" min={0} max={100} step="0.01" placeholder="Contoh: 11" required className="w-full" />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -111,12 +123,12 @@ export default function CreateTaxPage() {
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-          <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-          <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-tax">
+        <FormActions>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-tax">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </div>
   )

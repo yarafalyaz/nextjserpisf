@@ -253,16 +253,16 @@ export function PkwtCompensationPanel({
                 id="pkwt-agreement-ref"
                 name="agreementDocumentRef"
                 type="text"
-                className="h-9 text-xs"
+                className="h-11 md:h-9 text-xs"
                 placeholder="Wajib bila nominal kesepakatan diisi"
               />
             </div>
             <div className="flex flex-col justify-end gap-2">
-              <label htmlFor="pkwt-is-legacy" className="flex min-h-9 items-center gap-2 text-sm text-foreground">
+              <label htmlFor="pkwt-is-legacy" className="flex min-h-11 md:min-h-9 items-center gap-2 text-sm text-foreground">
                 <input id="pkwt-is-legacy" name="isLegacy" type="checkbox" value="1" className="size-4" />
                 Peristiwa lama (legacy, sekaligus)
               </label>
-              <Button type="submit" variant="primary" isDisabled={isPending || employees.length === 0} className="min-h-9">
+              <Button type="submit" variant="primary" isDisabled={isPending || employees.length === 0} className="min-h-11 md:min-h-9">
                 {isPending ? "Menyimpan..." : "Buat Peristiwa"}
               </Button>
             </div>
@@ -289,10 +289,10 @@ export function PkwtCompensationPanel({
                 name="period"
                 type="month"
                 required
-                className="h-9 text-xs"
+                className="h-11 md:h-9 text-xs"
               />
             </div>
-            <Button type="submit" variant="secondary" isDisabled={isPending} className="min-h-9">
+            <Button type="submit" variant="secondary" isDisabled={isPending} className="min-h-11 md:min-h-9">
               {isPending ? "Menjalankan..." : "Jalankan Akrual Bulan Ini"}
             </Button>
           </form>

@@ -62,7 +62,7 @@ export function SectionCards({
             </span>
             <Link
               href="/penjualan/pembayaran"
-              className="group inline-flex min-h-7 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline sm:min-h-0"
+              className="group inline-flex min-h-11 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline md:min-h-0"
             >
               <span className="sm:hidden">Riwayat</span>
               <span className="hidden sm:inline">Riwayat pembayaran</span>
@@ -115,7 +115,7 @@ export function SectionCards({
             </span>
             <Link
               href="/proyek"
-              className="group inline-flex min-h-7 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline sm:min-h-0"
+              className="group inline-flex min-h-11 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline md:min-h-0"
             >
               <span className="sm:hidden">Proyek ({completedThisMonth} selesai)</span>
               <span className="hidden sm:inline">Daftar proyek</span>
@@ -154,7 +154,7 @@ export function SectionCards({
             </span>
             <Link
               href="/laporan/piutang-pelanggan"
-              className="group inline-flex min-h-7 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline sm:min-h-0"
+              className="group inline-flex min-h-11 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline md:min-h-0"
             >
               Umur piutang
               <ArrowUpRight
@@ -192,7 +192,7 @@ export function SectionCards({
             </span>
             <Link
               href="/master/pelanggan"
-              className="group inline-flex min-h-7 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline sm:min-h-0"
+              className="group inline-flex min-h-11 shrink-0 items-center gap-0.5 font-medium text-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline md:min-h-0"
             >
               <span className="sm:hidden">Pelanggan</span>
               <span className="hidden sm:inline">Data pelanggan</span>

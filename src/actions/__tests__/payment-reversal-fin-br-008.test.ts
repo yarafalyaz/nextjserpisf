@@ -95,6 +95,7 @@ beforeEach(() => {
   mocks.assertPeriodOpenMock.mockResolvedValue(undefined)
   mocks.prismaMock.journal.findFirst.mockResolvedValue(null)
   mocks.prismaMock.withholdingCertificate.findFirst.mockResolvedValue(null)
+  mocks.prismaMock.withholdingCertificate.findMany.mockResolvedValue([])
   mocks.prismaMock.salesInvoice.update.mockResolvedValue({})
 })
 
@@ -342,6 +343,80 @@ describe("FIN-BR-008 reverseSalesPayment", () => {
       "reverse", "SalesPayment", 2,
       expect.stringContaining(REASON),
     )
+  })
+
+  it("regresi C3(b): bupot revoked pada SalesPayment ikut membalik jurnal WithholdingCertificate agar PPh Dimuka & Piutang net nol", async () => {
+    mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 2, status: "posted", amount: 9_800_000, withholdingAmount: 0, salesInvoiceId: 31,
+    })
+    mocks.prismaMock.withholdingCertificate.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.withholdingCertificate.findMany.mockResolvedValue([{ id: 55 }])
+
+    const paymentJournal = {
+      id: 61, status: "POSTED", transactionDate: new Date("2026-10-02"),
+      journalNumber: "JRN-PAY-61", type: "receipt",
+      totalDebit: 10_000_000, totalCredit: 10_000_000,
+      entries: [
+        { accountId: 101, debit: 9_800_000, credit: 0, memo: "Kas", costCenterId: null, profitCenterId: null },
+        { accountId: 103, debit: 200_000, credit: 0, memo: "PPh Dimuka", costCenterId: null, profitCenterId: null },
+        { accountId: 102, debit: 0, credit: 10_000_000, memo: "Piutang", costCenterId: null, profitCenterId: null },
+      ],
+    }
+    const revokeBupotJournal = {
+      id: 71, status: "POSTED", transactionDate: new Date("2026-10-03"),
+      journalNumber: "JRN-REV-BUPOT-55", type: "AUTO",
+      totalDebit: 200_000, totalCredit: 200_000,
+      entries: [
+        { accountId: 102, debit: 200_000, credit: 0, memo: "Balik Piutang", costCenterId: null, profitCenterId: null },
+        { accountId: 103, debit: 0, credit: 200_000, memo: "Balik PPh Dimuka", costCenterId: null, profitCenterId: null },
+      ],
+    }
+
+    mocks.prismaMock.journal.findMany
+      .mockResolvedValueOnce([paymentJournal])
+      .mockResolvedValueOnce([{ id: 61, status: "POSTED", transactionDate: paymentJournal.transactionDate }])
+      .mockResolvedValueOnce([revokeBupotJournal])
+      .mockResolvedValueOnce([{ id: 71, status: "POSTED", transactionDate: revokeBupotJournal.transactionDate }])
+
+    mocks.prismaMock.journal.create
+      .mockResolvedValueOnce({ id: 98 })
+      .mockResolvedValueOnce({ id: 99 })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 31, status: "partial", grandTotal: 10_000_000,
+    })
+    mocks.prismaMock.salesPayment.findMany.mockResolvedValue([])
+
+    const res = await salesActions.reverseSalesPayment(2, REASON)
+    expect(res.success).toBe(true)
+
+    expect(mocks.prismaMock.withholdingCertificate.findMany).toHaveBeenCalledWith({
+      where: { salesPaymentId: 2, status: "revoked" },
+      select: { id: true },
+    })
+    expect(mocks.prismaMock.journal.update).toHaveBeenCalledWith({
+      where: { id: 61 }, data: { status: "REVERSED" },
+    })
+    expect(mocks.prismaMock.journal.update).toHaveBeenCalledWith({
+      where: { id: 71 }, data: { status: "REVERSED" },
+    })
+    expect(mocks.prismaMock.journal.create).toHaveBeenCalledTimes(2)
+
+    // Verifikasi saldo bersih seluruh GL (kas, piutang, PPh dimuka) = 0
+    const reversalEntries = mocks.prismaMock.journalEntry.createMany.mock.calls.flatMap(
+      (c: any) => c[0].data,
+    )
+    const allEntries = [
+      ...paymentJournal.entries,
+      ...revokeBupotJournal.entries,
+      ...reversalEntries,
+    ]
+    const netByAccount = new Map<number, number>()
+    for (const e of allEntries) {
+      netByAccount.set(e.accountId, (netByAccount.get(e.accountId) ?? 0) + Number(e.debit) - Number(e.credit))
+    }
+    expect(netByAccount.get(101)).toBe(0)
+    expect(netByAccount.get(102)).toBe(0)
+    expect(netByAccount.get(103)).toBe(0)
   })
 
   it("bupot aktif: ditolak sampai revoke dulu, nol mutasi", async () => {

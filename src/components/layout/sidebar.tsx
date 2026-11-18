@@ -13,6 +13,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -90,7 +91,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
             asChild
             isActive={isActive(item.href)}
             tooltip={item.label}
-            className="min-h-10 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
+            className="min-h-11 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
           >
             <Link href={item.href} onClick={handleNav}>
               <Icon className="opacity-80" />
@@ -117,7 +118,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
             asChild
             isActive={isActive(item.href) || isGroupActive(item)}
             tooltip={item.label}
-            className="min-h-10 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
+            className="min-h-11 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
           >
             <Link href={item.href} onClick={handleNav}>
               <Icon className="opacity-80" />
@@ -136,30 +137,24 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
         className="group/collapsible"
       >
         <SidebarMenuItem>
-          <CollapsibleTrigger asChild>
-            <SidebarMenuButton
-              tooltip={item.label}
-              isActive={isGroupActive(item)}
-              className="min-h-10 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
-            >
+          <SidebarMenuButton
+            asChild
+            tooltip={item.label}
+            isActive={isGroupActive(item)}
+            className="min-h-11 md:min-h-8 text-[13px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
+          >
+            <Link href={item.href} onClick={handleNav}>
               <Icon className="opacity-80" />
-              {/*
-                Label grup bisa diklik menuju halaman ringkasan modul (hub),
-                sedangkan klik di area lain tetap membuka/menutup daftar anak
-                — `stopPropagation` mencegah keduanya terjadi sekaligus.
-              */}
-              <Link
-                href={item.href}
-                onClick={(event) => {
-                  handleNav()
-                  event.stopPropagation()
-                }}
-                className="truncate hover:underline"
-              >
-                {item.label}
-              </Link>
-              <ChevronRight aria-hidden="true" className="ml-auto size-3.5 text-sidebar-foreground/60 transition-colors duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
-            </SidebarMenuButton>
+              <span className="truncate">{item.label}</span>
+            </Link>
+          </SidebarMenuButton>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuAction
+              aria-label={`Buka submenu ${item.label}`}
+              className="top-2.5 md:top-1.5 after:-inset-3 md:after:hidden"
+            >
+              <ChevronRight aria-hidden="true" className="size-3.5 text-sidebar-foreground/60 transition-transform duration-150 ease-out group-data-[state=open]/collapsible:rotate-90" />
+            </SidebarMenuAction>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <SidebarMenuSub>
@@ -168,7 +163,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                   <SidebarMenuSubButton
                     asChild
                     isActive={isActive(child.href)}
-                    className="h-9 md:h-7 text-[13px] md:text-[12.5px] data-[active=true]:font-semibold"
+                    className="min-h-11 md:min-h-7 md:h-7 text-[13px] md:text-[12.5px] data-[active=true]:font-semibold"
                   >
                     <Link href={child.href} onClick={handleNav}>
                       <child.icon className="size-3.5 opacity-75" />

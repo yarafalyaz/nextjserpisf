@@ -29,8 +29,7 @@ import {
   assertQcReferenceUnreferenced,
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
-import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
-import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
+import { applyWorkOrderCompletionSideEffectsTx } from "@/lib/services/work-order-completion.service";
 import { availableQty, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
 import { assertItemsExistAndActive } from "@/lib/services/material-request.service";
@@ -1974,36 +1973,10 @@ async function completeWorkOrderTx(
       throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
     }
 
-    // Update all WO items to completed
-    await tx.workOrderItem.updateMany({
-      where: { workOrderId },
-      data: { status: "completed" },
-    });
-
-    // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
-    // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
-    // ikut menggulung pelepasan ini (AC-RES-4).
-    const released = await releaseActiveReservationsForWorkOrderTx(tx, {
-      workOrderId,
-      releasedBy: userId,
-      reason: "Perintah kerja selesai",
-    });
-
-    // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
-    // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
-    // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
-    // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
-    await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
-
-    // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama
-    // untuk SEMUA baris issue (bukan hanya bergaransi), menaut coverage
-    // yang baru lahir di atas. Tanpa kendaraan: nol baris (BR-IP-07),
-    // WO tetap completed — hasil skipped tidak menggagalkan klaim ini.
-    await createInstalledPartsForWorkOrder(workOrderId, new Date(), tx);
-
-    // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
-    // the atomic claim above so only the winning request reaches here).
-    await autoCreateDeliveryOrder(workOrderId, userId, tx);
+    // F-2026-10-21-012 inti (BR-RES-10), F-2026-10-21-021, F-2026-10-22-072-S,
+    // dan DO otomatis dieksekusi melalui helper bersama agar sinkron proyek
+    // memakai jalur efek samping yang persis sama.
+    const released = await applyWorkOrderCompletionSideEffectsTx(tx, workOrderId, userId);
 
     // Sync linked Project status (same tx so status never diverges).
     if (opts.projectId) {
@@ -2016,75 +1989,6 @@ async function completeWorkOrderTx(
     return prisma.$transaction(run);
   }
   return run(client as TxClient);
-}
-
-/**
- * Auto-create DeliveryOrder from completed WorkOrder.
- * Only creates DO if WO has items with quantity > 0.
- * Accepts an optional txClient so the caller can include the DO creation in
- * its own transaction (WO completion); falls back to the global client.
- */
-async function autoCreateDeliveryOrder(workOrderId: number, userId: number, txClient?: TxClient) {
-  const db = txClient ?? prisma;
-  const wo = await db.workOrder.findUniqueOrThrow({
-    where: { id: workOrderId },
-    include: { items: true, customer: true },
-  });
-
-  // Only create DO if there are items to deliver.
-  // Putaran 113: baris jasa/custom tersimpan dengan itemId 0 (hook DP menulis
-  // `item.itemId ?? 0`, dan laporan kebutuhan material menyebut "baris jasa
-  // (itemId=0)"). DeliveryOrderItem.itemId ber-FK RESTRICT ke items dan id 0
-  // tak pernah ada — menyalinnya membuat createMany melempar 1452 di dalam tx
-  // penyelesaian, jadi WO berisi jasa TIDAK PERNAH bisa diselesaikan. Baris
-  // tanpa barang katalog juga tak bisa dikirim (createDeliveryOrder menolak
-  // baris tanpa itemId), jadi ia memang bukan isi surat jalan.
-  // Sejak audit 2026-11-17 baris jasa tersimpan `itemId = NULL` (dulu 0).
-  // Keduanya sama-sama bukan barang katalog, jadi disaring dengan satu predikat.
-  const deliverableItems = wo.items.filter(
-    (i): i is typeof i & { itemId: number } =>
-      Number(i.qty) > 0 && i.itemId != null && i.itemId > 0,
-  );
-  if (deliverableItems.length === 0) return;
-
-  // Guard: a DeliveryOrder must be attached to a SalesOrder derived from the WO's
-  // quotation. If the WO has no linked quotation we cannot safely pick an SO
-  // (Prisma treats `where: { quotationId: undefined }` as "no filter", which
-  // would silently attach the DO to the first SalesOrder in the table). Refuse
-  // to create a DO in that case rather than corrupt the linkage.
-  if (!wo.quotationId) return;
-
-  // Find linked SalesOrder to attach DO to
-  const salesOrder = await db.salesOrder.findFirst({
-    where: { quotationId: wo.quotationId },
-  });
-  if (!salesOrder) return;
-
-  const doDocNo = await generateDocumentNumber("DO");
-
-  const deliveryOrder = await db.deliveryOrder.create({
-    data: {
-      documentNo: doDocNo,
-      doNumber: doDocNo,
-      salesOrderId: salesOrder.id,
-      customerId: wo.customerId,
-      date: new Date(),
-      deliveryDate: new Date(),
-      status: "draft",
-      notes: `Otomatis dibuat dari Work Order ${wo.documentNo}`,
-      createdBy: userId,
-    },
-  });
-
-  // Create DO items from WO items
-  await db.deliveryOrderItem.createMany({
-    data: deliverableItems.map((item) => ({
-      deliveryOrderId: deliveryOrder.id,
-      itemId: item.itemId,
-      qty: item.qty,
-      notes: item.description || null,
-    })),
-  });
 }
 
 /**

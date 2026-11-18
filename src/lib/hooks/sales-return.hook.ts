@@ -204,7 +204,13 @@ export async function onSalesReturnCompleted(
           // Jumlah serial WAJIB persis qty dasar yang kembali (pola
           // goods-receipt): 1 serial untuk retur 5 unit menghidupkan stok
           // kuantitas tanpa identitas — 4 unit hantu tak berserial.
+          // Qty dasar konversi UOM juga wajib bilangan bulat (bukan pecahan).
           const expectedSerials = Math.round(baseQty);
+          if (Math.abs(baseQty - expectedSerials) > 1e-6) {
+            throw new Error(
+              `Item #${item.itemId} melacak nomor seri: qty dasar retur (${baseQty}) harus berupa bilangan bulat.`,
+            );
+          }
           if (rowSerials.length !== expectedSerials) {
             throw new Error(
               `Item #${item.itemId} melacak nomor seri: jumlah nomor seri (${rowSerials.length}) tidak sama dengan qty retur (${expectedSerials}).`,

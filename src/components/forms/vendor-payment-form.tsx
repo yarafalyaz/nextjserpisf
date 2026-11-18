@@ -16,7 +16,7 @@ import { Upload, X, FileText } from "@/components/ui/fontawesome-icons"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface UploadedFile {
   id: number
@@ -54,7 +54,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
   const [targetBillId, setTargetBillId] = useState<string | null>(
     (payment?.vendorBillId ?? preselectedBillId) ? String(payment?.vendorBillId ?? preselectedBillId) : null,
   )
-  const [paymentDate, setPaymentDate] = useState(payment?.date || toLocalDateOnly(new Date()))
+  const [paymentDate, setPaymentDate] = useState(payment?.date || wibDateOnly(new Date()))
   const [vendorId, setVendorId] = useState(
     payment?.vendorId
       ? String(payment.vendorId)

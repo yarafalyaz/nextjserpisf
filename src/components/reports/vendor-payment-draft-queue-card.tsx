@@ -88,7 +88,7 @@ export function VendorPaymentDraftQueueCard({
               <li key={entry.vendorId}>
                 <StatusChip
                   status={entry.vendorName}
-                  customLabel={`${entry.vendorName}: ${formatNumber(entry.total)} pembayaran draft (${formatNumber(entry.levelCounts.mengendap)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()}) — ${formatCurrencyExact(entry.totalAmount)} ${totalLabel}`}
+                  customLabel={`${entry.vendorName}: ${formatNumber(entry.total)} pembayaran draft (${formatNumber(entry.levelCounts.mengendap)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${VENDOR_PAYMENT_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()}) - ${formatCurrencyExact(entry.totalAmount)} ${totalLabel}`}
                   customTone="default"
                 />
               </li>

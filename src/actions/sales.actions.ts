@@ -5,7 +5,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { activeSalesPaymentWhere, isReversedPayment } from "@/lib/finance/payment-status"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
-import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
+import { computeQuotationTotals, computeQuotationLine, normalizeQuotationLineInput } from "@/lib/sales/quotation-totals"
 import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
@@ -1155,15 +1155,16 @@ function quotationSectionsCreate(data: any, computeLine: (item: any) => { discou
       sortOrder: si,
       items: {
         create: (section.items || []).map((item: any, ii: number) => {
+          const { qty, unitPrice } = normalizeQuotationLineInput(item)
           const { discountAmount, total } = computeLine(item)
           return {
             // itemId string dari safeJsonParse → number FK; "abc"/null tak
             // boleh tulis string ke kolom Int.
             itemId: item.itemId ? Number(item.itemId) : null,
             description: item.description || null,
-            qty: Number(item.qty) || 1,
+            qty,
             uom: item.uom || null,
-            unitPrice: Number(item.unitPrice) || 0,
+            unitPrice,
             discount: discountAmount,
             total,
             sortOrder: ii,
@@ -3608,6 +3609,25 @@ export async function reverseSalesPayment(
 
     await reverseJournalsByReferenceTx(tx, "SalesPayment", id, cleanReason, userId)
 
+    // C3(b): jika pembayaran pernah memiliki bupot yang sudah di-revoke,
+    // revoke tersebut sudah memposting jurnal lawan ("WithholdingCertificate").
+    // Reversal penuh atas "SalesPayment" di atas ikut membalik kaki PPh awal,
+    // sehingga jurnal revoke bupot wajib ikut di-reverse agar kaki PPh bersih
+    // menjadi nol (tidak terbalik dua kali).
+    const revokedBupots = await tx.withholdingCertificate.findMany({
+      where: { salesPaymentId: id, status: "revoked" },
+      select: { id: true },
+    })
+    if (revokedBupots.length > 0) {
+      await reverseJournalsByReferenceTx(
+        tx,
+        "WithholdingCertificate",
+        revokedBupots.map((b) => b.id),
+        cleanReason,
+        userId,
+      )
+    }
+
     await tx.salesPayment.update({
       where: { id },
       data: {
@@ -3999,6 +4019,18 @@ export async function updateSalesOrder(id: number, formData: FormData) {
         where: { id },
         data: { subtotal, discount: discountTotal, tax: taxAmount, grandTotal, totalAmount: grandTotal },
       })
+    }
+
+    // H1: jika SalesOrder sudah pernah diajukan approval (mis. masih pending di
+    // langkah >= 2 setelah Step-1 approve), edit draft wajib me-reset approval
+    // kembali ke Step 1 via requestApprovalIfConfigured (tanpa memindahkan titik
+    // inisiasi jika belum pernah diajukan).
+    const existingApproval = await tx.approval.findFirst({
+      where: { referenceType: "SalesOrder", referenceId: id },
+      select: { id: true },
+    })
+    if (existingApproval) {
+      await requestApprovalIfConfigured("SalesOrder", id, Number(user.id), tx)
     }
 
     return updated

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createAttendance, updateAttendance } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -79,28 +80,30 @@ export function AttendanceForm({
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      // Tanpa stempel jam tidak ada klaim lokasi: koordinat pasangan jam yang
-      // kosong tidak dikirim.
-      if (location) {
-        if (fd.get("checkIn")) {
-          fd.set("checkInLatitude", String(location.latitude))
-          fd.set("checkInLongitude", String(location.longitude))
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        // Tanpa stempel jam tidak ada klaim lokasi: koordinat pasangan jam yang
+        // kosong tidak dikirim.
+        if (location) {
+          if (fd.get("checkIn")) {
+            fd.set("checkInLatitude", String(location.latitude))
+            fd.set("checkInLongitude", String(location.longitude))
+          }
+          if (fd.get("checkOut")) {
+            fd.set("checkOutLatitude", String(location.latitude))
+            fd.set("checkOutLongitude", String(location.longitude))
+          }
         }
-        if (fd.get("checkOut")) {
-          fd.set("checkOutLatitude", String(location.latitude))
-          fd.set("checkOutLongitude", String(location.longitude))
+        const res = item ? await updateAttendance(item.id, fd) : await createAttendance(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan absensi")
+          return
         }
-      }
-      const res = item ? await updateAttendance(item.id, fd) : await createAttendance(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan absensi")
-        return
-      }
-      showSuccess(item ? "Absensi diperbarui" : "Absensi dicatat")
-      form.reset()
-      router.push("/sdm/absensi")
-      router.refresh()
+        showSuccess(item ? "Absensi diperbarui" : "Absensi dicatat")
+        form.reset()
+        router.push("/sdm/absensi")
+        router.refresh()
+      }, "Gagal menyimpan absensi")
     })
   }
 

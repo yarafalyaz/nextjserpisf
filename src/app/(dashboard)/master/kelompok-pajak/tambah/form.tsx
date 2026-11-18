@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTaxGroup } from "@/actions/master.actions"
 import { showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface Props {
   taxes: { id: number; name: string; rate: number }[]
@@ -22,15 +24,17 @@ export function TaxGroupForm({ taxes }: Props) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const res = await createTaxGroup(formData)
-      if (!res.success) {
-        // Jangan pura-pura sukses: validasi server (mis. belum memilih
-        // pajak) dulu tertelan dan pengguna terlempar ke daftar kosong.
-        showError(res.error ?? "Gagal membuat kelompok pajak")
-        return
-      }
-      router.push("/master/kelompok-pajak")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await createTaxGroup(formData)
+        if (!res.success) {
+          // Jangan pura-pura sukses: validasi server (mis. belum memilih
+          // pajak) dulu tertelan dan pengguna terlempar ke daftar kosong.
+          showError(res.error ?? "Gagal membuat kelompok pajak")
+          return
+        }
+        router.push("/master/kelompok-pajak")
+        router.refresh()
+      }, "Gagal membuat kelompok pajak")
     })
   }
 
@@ -62,12 +66,12 @@ export function TaxGroupForm({ taxes }: Props) {
           </div>
         </fieldset>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending}>
+      <FormActions>
+        <Button className="w-full md:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

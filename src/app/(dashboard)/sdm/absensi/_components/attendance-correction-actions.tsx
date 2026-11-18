@@ -9,6 +9,7 @@ import {
   rejectAttendanceCorrection,
 } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Label } from "@/components/ui/shadcn/label"
@@ -37,14 +38,16 @@ export function AttendanceCorrectionActions({
 
   function run(promise: Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const result = await promise
-      if (!result.success) {
-        showError(result.error ?? "Gagal memproses pengajuan")
-        return
-      }
-      showSuccess(ok)
-      setConfirmApprove(false)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await promise
+        if (!result.success) {
+          showError(result.error ?? "Gagal memproses pengajuan")
+          return
+        }
+        showSuccess(ok)
+        setConfirmApprove(false)
+        router.refresh()
+      }, "Gagal memproses pengajuan")
     })
   }
 

@@ -5,6 +5,7 @@ import { useCallback, useRef, useState, useTransition, useEffect, useMemo } from
 import { createProduct, updateProduct } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -242,12 +243,14 @@ export function ProductForm({
     }
 
     startTransition(async () => {
-      const result = product?.id ? await updateProduct(product.id, formData) : await createProduct(formData)
-      if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
-      if (!product?.id) idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(product?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-      router.push("/produksi/products")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = product?.id ? await updateProduct(product.id, formData) : await createProduct(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!product?.id) idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(product?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
+        router.push("/produksi/products")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 

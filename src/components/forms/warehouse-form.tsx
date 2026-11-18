@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface WarehouseFormProps {
   warehouse?: {
@@ -77,12 +78,12 @@ export function WarehouseForm({ warehouse, generatedCode, enableAutoCode = true 
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-warehouse">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} id="submit-warehouse" className="w-full md:w-auto">
           {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

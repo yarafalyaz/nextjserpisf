@@ -254,7 +254,14 @@ export const assetSchema = z.object({
 
 export const assetDisposalSchema = z.object({
   assetId: requiredId("Aset"),
-  proceeds: optionalNum(0),
+  proceeds: z.coerce
+    .number()
+    .finite("Nilai hasil pelepasan tidak valid.")
+    .min(0)
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, {
+      message: "Nilai hasil pelepasan maksimal 2 angka desimal.",
+    })
+    .optional(),
   disposalDate: optionalDate,
   reason: optionalStr(500),
 })

@@ -63,6 +63,7 @@ import {
 import {
   computeLateMinutes,
   computeOvertimeMinutes,
+  getWibTodayUtcDate,
   wibDateToUtcMidnight,
   wibMinutesOfDay,
   wibTimeToUtcInstant,
@@ -218,12 +219,13 @@ function buildPayrollComponentLinesFromAssignments(
   assignments: readonly PayrollAssignmentRow[],
   endDate: Date,
 ): PayrollComponentLineData[] {
+  const refEndDate = getWibTodayUtcDate(endDate);
   const seen = new Set<number>();
   const lines: PayrollComponentLineData[] = [];
   const sorted = [...assignments].sort((a, b) => a.componentId - b.componentId);
   for (const a of sorted) {
-    if (a.effectiveFrom > endDate) continue;
-    if (a.effectiveTo != null && a.effectiveTo < endDate) continue;
+    if (a.effectiveFrom > refEndDate) continue;
+    if (a.effectiveTo != null && a.effectiveTo < refEndDate) continue;
     const amount = Number(a.defaultAmount);
     if (!Number.isFinite(amount) || amount < 0) {
       throw new Error("Nominal penugasan komponen gaji tidak valid");
@@ -270,12 +272,13 @@ async function loadEffectivePayrollAssignments(
 ): Promise<Map<number, PayrollAssignmentRow[]>> {
   const map = new Map<number, PayrollAssignmentRow[]>();
   if (employeeIds.length === 0) return map;
+  const refEndDate = getWibTodayUtcDate(endDate);
   const rows = await db.employeePayrollComponent.findMany({
     where: {
       employeeId: { in: employeeIds },
       isActive: true,
-      effectiveFrom: { lte: endDate },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: endDate } }],
+      effectiveFrom: { lte: refEndDate },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: refEndDate } }],
       component: { isActive: true, recurrence: "fixed" },
     },
     include: {
@@ -2098,6 +2101,7 @@ async function computeBulkPayrollEstimations(
   rangeStart.setHours(0, 0, 0, 0);
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
+  const periodEndUtc = wibDateToUtcMidnight(endDateStr);
 
   // Fan-out: fetch EVERYTHING the per-employee estimator needs, once.
   const [
@@ -2172,7 +2176,7 @@ async function computeBulkPayrollEstimations(
       },
       select: { employeeId: true, startDate: true, endDate: true },
     }),
-    loadEffectivePayrollAssignments(prisma, employeeIds, rangeEnd),
+    loadEffectivePayrollAssignments(prisma, employeeIds, periodEndUtc),
   ]);
 
   // Index per-employee slices in O(N)
@@ -2209,13 +2213,13 @@ async function computeBulkPayrollEstimations(
   const evalEnd = rangeEnd < today ? rangeEnd : today;
   const publicHolidaySet = new Set(holidays.map((holiday) => dateKey(holiday.date)));
   // P1-6: satu params untuk seluruh batch (satu periode) — mesin SAMA dengan single.
-  const bulkStatutoryParams = await getStatutoryParams(prisma, rangeEnd);
+  const bulkStatutoryParams = await getStatutoryParams(prisma, periodEndUtc);
   // F-026: tabel TER per kategori dipakai batch ini (fail-closed di pemakaian).
   const bulkTerByCategory = new Map<string, TerBracket[] | null>();
   for (const cat of ["A", "B", "C"] as const) {
-    bulkTerByCategory.set(cat, await getTerBrackets(prisma as never, cat, rangeEnd));
+    bulkTerByCategory.set(cat, await getTerBrackets(prisma as never, cat, periodEndUtc));
   }
-  const bulkPeriod = `${rangeEnd.getFullYear()}-${String(rangeEnd.getMonth() + 1).padStart(2, "0")}`;
+  const bulkPeriod = `${periodEndUtc.getUTCFullYear()}-${String(periodEndUtc.getUTCMonth() + 1).padStart(2, "0")}`;
   // AUD-R3-02: bulk sama — tolak fallback di sumber.
   if (bulkStatutoryParams.fromFallback) {
     throw new Error(
@@ -2414,7 +2418,7 @@ async function computeBulkPayrollEstimations(
     // 6. Statutory deductions (mesin sama dengan single).
     const componentLines = buildPayrollComponentLinesFromAssignments(
       componentAssignmentsByEmployee.get(employee.id) ?? [],
-      rangeEnd,
+      periodEndUtc,
     );
     const componentSummary = summarizePayrollComponentLines(componentLines);
     const grossSalary = safeSum(
@@ -2607,7 +2611,7 @@ export async function generateBulkPayroll(
     if (!isPayrollFrequency(paymentFrequency)) {
       throw new Error("Frekuensi run penggajian tidak valid, gunakan MONTHLY atau WEEKLY.");
     }
-    assertPayrollPeriodMatchesEndDate(period, new Date(endDateStr));
+    assertPayrollPeriodMatchesEndDate(period, wibDateToUtcMidnight(endDateStr));
 
     // BR-HRS-08 (AC-HRS-2): populasi run massal mengikuti cakupan HR pemanggil.
     // Peran ber-cakupan hanya menerbitkan slip karyawan yang boleh dilihatnya;
@@ -2653,8 +2657,8 @@ export async function generateBulkPayroll(
     // menerima slip reguler massal. Periode seluruhnya sesudah berhenti
     // atau memotong tanpa jalur final -> dikeluarkan dari populasi massal
     // (slip final dibuat lewat jalur single processPayroll). Tercatat log.
-    const periodStart = new Date(startDateStr);
-    const periodEnd = new Date(endDateStr);
+    const periodStart = wibDateToUtcMidnight(startDateStr);
+    const periodEnd = wibDateToUtcMidnight(endDateStr);
     const gatedOut: number[] = [];
     const employmentEligible = employees.filter((e) => {
       const gate = evaluatePayrollEmploymentGate({
@@ -2721,8 +2725,8 @@ export async function generateBulkPayroll(
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
     // ke-2 dalam bulan sama kini LOLOS, yang beririsan ditolak per karyawan
     // menyebut documentNo penabrak, karyawan lain tetap terbit AC-PF-3).
-    const rangeStart = new Date(startDateStr);
-    const rangeEnd = new Date(endDateStr);
+    const rangeStart = wibDateToUtcMidnight(startDateStr);
+    const rangeEnd = wibDateToUtcMidnight(endDateStr);
     const existingPayrolls = eligibleEmployees.length === 0
       ? []
       : await prisma.payroll.findMany({
@@ -2871,8 +2875,8 @@ export async function generateBulkPayroll(
         documentNo,
         employeeId: empId,
         period,
-        startDate: new Date(startDateStr),
-        endDate: new Date(endDateStr),
+        startDate: rangeStart,
+        endDate: rangeEnd,
         baseSalary: est.baseSalary ?? 0,
         allowances,
         deductions,

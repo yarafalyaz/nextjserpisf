@@ -11,6 +11,7 @@ import {
   updateWorkSchedule,
 } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
@@ -61,16 +62,18 @@ export function HolidayForm({ holiday }: { holiday?: HolidayItem }) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      const res = holiday ? await updateHoliday(holiday.id, fd) : await createHoliday(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan hari libur")
-        return
-      }
-      showSuccess(holiday ? "Hari libur diperbarui" : "Hari libur ditambahkan")
-      form.reset()
-      router.push("/sdm/kalender-kerja")
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        const res = holiday ? await updateHoliday(holiday.id, fd) : await createHoliday(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan hari libur")
+          return
+        }
+        showSuccess(holiday ? "Hari libur diperbarui" : "Hari libur ditambahkan")
+        form.reset()
+        router.push("/sdm/kalender-kerja")
+        router.refresh()
+      }, "Gagal menyimpan hari libur")
     })
   }
 
@@ -134,18 +137,20 @@ export function DepartmentHolidayForm({
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      const res = item
-        ? await updateDepartmentHoliday(item.id, fd)
-        : await createDepartmentHoliday(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan hari libur departemen")
-        return
-      }
-      showSuccess(item ? "Hari libur departemen diperbarui" : "Hari libur departemen ditambahkan")
-      form.reset()
-      router.push("/sdm/kalender-kerja")
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        const res = item
+          ? await updateDepartmentHoliday(item.id, fd)
+          : await createDepartmentHoliday(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan hari libur departemen")
+          return
+        }
+        showSuccess(item ? "Hari libur departemen diperbarui" : "Hari libur departemen ditambahkan")
+        form.reset()
+        router.push("/sdm/kalender-kerja")
+        router.refresh()
+      }, "Gagal menyimpan hari libur departemen")
     })
   }
 
@@ -212,30 +217,32 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      // Checkbox `workDays` mengirim satu entri per hari terpilih, sedangkan
-      // `parseFormData` memetakan FormData ke objek dan hanya menyimpan nilai
-      // TERAKHIR: jadwal Senin–Jumat akan tersimpan sebagai "Jumat" saja. Jadi
-      // hari-hari digabung lebih dulu menjadi satu nilai.
-      fd.set("workDays", fd.getAll("workDays").map(String).join(","))
-      // Checkbox `isActive` native tidak mengirim field saat tidak dicentang,
-      // sedangkan aksi membaca absen sebagai tetap aktif — tanpa set eksplisit,
-      // jadwal nonaktif tidak pernah bisa dinonaktifkan lewat UI.
-      const activeBox = form.querySelector<HTMLInputElement>('input[name="isActive"]')
-      fd.set("isActive", activeBox?.checked ? "true" : "false")
-      if (!schedule) fd.set("idempotencyKey", idempotencyKeyRef.current)
-      const res = schedule
-        ? await updateWorkSchedule(schedule.id, fd)
-        : await createWorkSchedule(fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan jadwal kerja")
-        return
-      }
-      if (!schedule) idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(schedule ? "Jadwal kerja diperbarui" : "Jadwal kerja ditambahkan")
-      form.reset()
-      router.push("/sdm/kalender-kerja")
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        // Checkbox `workDays` mengirim satu entri per hari terpilih, sedangkan
+        // `parseFormData` memetakan FormData ke objek dan hanya menyimpan nilai
+        // TERAKHIR: jadwal Senin–Jumat akan tersimpan sebagai "Jumat" saja. Jadi
+        // hari-hari digabung lebih dulu menjadi satu nilai.
+        fd.set("workDays", fd.getAll("workDays").map(String).join(","))
+        // Checkbox `isActive` native tidak mengirim field saat tidak dicentang,
+        // sedangkan aksi membaca absen sebagai tetap aktif — tanpa set eksplisit,
+        // jadwal nonaktif tidak pernah bisa dinonaktifkan lewat UI.
+        const activeBox = form.querySelector<HTMLInputElement>('input[name="isActive"]')
+        fd.set("isActive", activeBox?.checked ? "true" : "false")
+        if (!schedule) fd.set("idempotencyKey", idempotencyKeyRef.current)
+        const res = schedule
+          ? await updateWorkSchedule(schedule.id, fd)
+          : await createWorkSchedule(fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan jadwal kerja")
+          return
+        }
+        if (!schedule) idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(schedule ? "Jadwal kerja diperbarui" : "Jadwal kerja ditambahkan")
+        form.reset()
+        router.push("/sdm/kalender-kerja")
+        router.refresh()
+      }, "Gagal menyimpan jadwal kerja")
     })
   }
 

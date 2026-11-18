@@ -13,7 +13,8 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { FormActions } from "@/components/ui/form-section"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import {
   Wallet,
@@ -62,7 +63,7 @@ export function PettyCashForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(pettyCash?.date ?? toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(pettyCash?.date ?? wibDateOnly(new Date()))
   const [type, setType] = useState<string>(pettyCash?.type ?? defaultType ?? "OUT")
   const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
   const [projectId, setProjectId] = useState<string | null>(pettyCash?.projectId ? String(pettyCash.projectId) : null)
@@ -464,11 +465,11 @@ export function PettyCashForm({
       </div>
 
       {/* Form Action Buttons */}
-      <div className="flex items-center justify-end gap-3 pt-2">
+      <FormActions>
         <Button
           type="button"
           onPress={() => router.back()}
-          className="min-h-11 sm:min-h-9 px-4 text-xs font-medium"
+          className="w-full md:w-auto px-4 text-xs font-medium"
         >
           Batal
         </Button>
@@ -476,7 +477,7 @@ export function PettyCashForm({
           type="submit"
           variant="primary"
           isDisabled={isPending || isOverdrawn}
-          className="min-h-11 sm:min-h-9 px-5 text-xs font-semibold"
+          className="w-full md:w-auto px-5 text-xs font-semibold"
         >
           {isPending
             ? "Menyimpan..."
@@ -486,7 +487,7 @@ export function PettyCashForm({
                 ? "Simpan Pengisian Kas"
                 : "Simpan Voucher Kas"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

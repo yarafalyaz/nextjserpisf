@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AppMonthPicker } from "@/components/ui/month-picker"
 import { buildPathFilterHref } from "@/lib/utils/path-filters"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 
 export interface PeriodClosePanelProps {
   monthKey: string
@@ -53,16 +54,21 @@ export function PeriodClosePanel({
     setConfirming(null)
     setBusy("close")
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("date", monthEnd)
-      const result = await closeAccountingPeriod(formData)
-      setBusy(null)
-      if (result.success) {
-        showSuccess(result.message ?? "Periode dikunci.")
-        router.refresh()
-      } else {
-        showError(result.error ?? "Gagal mengunci periode.")
-      }
+      await runUiAction(
+        async () => {
+          const formData = new FormData()
+          formData.set("date", monthEnd)
+          const result = await closeAccountingPeriod(formData)
+          if (result.success) {
+            showSuccess(result.message ?? "Periode dikunci.")
+            router.refresh()
+          } else {
+            showError(result.error ?? "Gagal mengunci periode.")
+          }
+        },
+        "Gagal mengunci periode.",
+        () => setBusy(null),
+      )
     })
   }
 
@@ -74,14 +80,19 @@ export function PeriodClosePanel({
     setConfirming(null)
     setBusy("reopen")
     startTransition(async () => {
-      const result = await reopenAccountingPeriod()
-      setBusy(null)
-      if (result.success) {
-        showSuccess(result.message ?? "Kunci periode dibuka.")
-        router.refresh()
-      } else {
-        showError(result.error ?? "Gagal membuka kunci periode.")
-      }
+      await runUiAction(
+        async () => {
+          const result = await reopenAccountingPeriod()
+          if (result.success) {
+            showSuccess(result.message ?? "Kunci periode dibuka.")
+            router.refresh()
+          } else {
+            showError(result.error ?? "Gagal membuka kunci periode.")
+          }
+        },
+        "Gagal membuka kunci periode.",
+        () => setBusy(null),
+      )
     })
   }
 

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { allocateLandedCost } from "@/lib/services/landed-cost.service"
 import { formatCurrencyExact } from "@/lib/utils/format"
 
@@ -254,7 +254,7 @@ export function GoodsReceiptForm({
     receipt?.referenceNumber ?? "",
   );
   const [date, setDate] = useState<string>(
-    receipt?.date ?? toLocalDateOnly(new Date()),
+    receipt?.date ?? wibDateOnly(new Date()),
   );
   // Actual landed costs for this receipt. Empty/0 → derive from the PO estimate.
   const [shippingCost, setShippingCost] = useState<number | null>(
@@ -556,7 +556,7 @@ export function GoodsReceiptForm({
                             {Math.max(row.qtyOrdered - row.qtyReceivedBefore, 0)}
                           </td>
                           <td className="py-2.5 px-3 text-right">
-                            <input
+                            <Input
                               type="number"
                               min={0}
                               max={Math.max(
@@ -573,12 +573,18 @@ export function GoodsReceiptForm({
                                   ? "Item ini sudah diterima penuh"
                                   : undefined
                               }
-                              onChange={(e) =>
-                                updateItem(index, {
-                                  qty: Number(e.target.value),
-                                })
-                              }
-                              className="h-9 w-24 text-xs text-right font-mono tabular-nums"
+                              onChange={(e) => {
+                                const maxQty = Math.max(
+                                  row.qtyOrdered - row.qtyReceivedBefore,
+                                  0,
+                                );
+                                const raw = Number(e.target.value);
+                                const qty = Number.isFinite(raw)
+                                  ? Math.min(maxQty, Math.max(0, raw))
+                                  : 0;
+                                updateItem(index, { qty });
+                              }}
+                              className="h-11 md:h-9 w-24 text-xs text-right font-mono tabular-nums"
                             />
                           </td>
                           <td className="py-2.5 px-3">

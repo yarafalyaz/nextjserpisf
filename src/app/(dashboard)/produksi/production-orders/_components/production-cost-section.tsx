@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { Pencil } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { formatCurrencyExact, formatNumber } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -126,34 +127,38 @@ export function ProductionCostSection({
     }
 
     startTransition(async () => {
-      const result = editing
-        ? await updateProductionCost(editing.id, formData)
-        : await createProductionCost(formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menyimpan biaya")
-        return
-      }
-      if (!editing) idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(editing ? "Biaya produksi diperbarui" : "Biaya produksi ditambahkan")
-      setOpen(false)
-      setEditing(null)
-      setCategory("labor")
-      setHours("")
-      setRate(null)
-      setAmount(null)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = editing
+          ? await updateProductionCost(editing.id, formData)
+          : await createProductionCost(formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyimpan biaya")
+          return
+        }
+        if (!editing) idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(editing ? "Biaya produksi diperbarui" : "Biaya produksi ditambahkan")
+        setOpen(false)
+        setEditing(null)
+        setCategory("labor")
+        setHours("")
+        setRate(null)
+        setAmount(null)
+        router.refresh()
+      }, "Gagal menyimpan biaya")
     })
   }
 
   const handleDelete = useCallback((id: number) => {
     startTransition(async () => {
-      const result = await deleteProductionCost(id)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menghapus biaya")
-        return
-      }
-      showSuccess("Biaya produksi dihapus")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await deleteProductionCost(id)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menghapus biaya")
+          return
+        }
+        showSuccess("Biaya produksi dihapus")
+        router.refresh()
+      }, "Gagal menghapus biaya")
     })
   }, [router])
 
@@ -287,17 +292,19 @@ export function ProductionCostSection({
     formData.set("rate", driverRate === null ? "" : String(driverRate))
     formData.set("idempotencyKey", overheadIdempotencyKeyRef.current)
     startTransition(async () => {
-      const result = await applyOverheadToProductionOrder(formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menerapkan overhead")
-        return
-      }
-      overheadIdempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(`Overhead ${formatCurrencyExact((result as { amount?: number }).amount ?? 0)} diterapkan`)
-      setOverheadOpen(false)
-      setDriverQty("")
-      setDriverRate(null)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await applyOverheadToProductionOrder(formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menerapkan overhead")
+          return
+        }
+        overheadIdempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(`Overhead ${formatCurrencyExact((result as { amount?: number }).amount ?? 0)} diterapkan`)
+        setOverheadOpen(false)
+        setDriverQty("")
+        setDriverRate(null)
+        router.refresh()
+      }, "Gagal menerapkan overhead")
     })
   }
 
@@ -312,13 +319,15 @@ export function ProductionCostSection({
       return
     }
     startTransition(async () => {
-      const result = await pullLaborCostFromTimesheets(workOrderId, productionOrderId, rateNum)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menarik lembar waktu")
-        return
-      }
-      showSuccess(`Ditarik ${result.count} lembar waktu → ${formatCurrencyExact(result.added ?? 0)}`)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await pullLaborCostFromTimesheets(workOrderId, productionOrderId, rateNum)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menarik lembar waktu")
+          return
+        }
+        showSuccess(`Ditarik ${result.count} lembar waktu → ${formatCurrencyExact(result.added ?? 0)}`)
+        router.refresh()
+      }, "Gagal menarik lembar waktu")
     })
   }
 
@@ -461,6 +470,7 @@ export function ProductionCostSection({
               selectable={false}
               enableColumnToggle={false}
               enableExport={false}
+              showPagination={false}
               pageSize={50}
             />
             <div className="flex flex-wrap items-center justify-end gap-6 rounded-lg border border-default bg-surface-muted/40 px-4 py-2.5 text-sm">

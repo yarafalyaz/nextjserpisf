@@ -5,6 +5,7 @@ import { useCallback, useRef, useState, useTransition, useMemo } from "react"
 import { createBomRevision, updateBomRevision } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -201,17 +202,19 @@ export function BomRevisionForm({
     }
 
     startTransition(async () => {
-      const result = revision
-        ? await updateBomRevision(revision.id, formData)
-        : await createBomRevision(formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      if (!revision) idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(revision ? "Revisi BOM diperbarui" : "Revisi BOM dibuat")
-      router.push("/produksi/bom-revisi")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = revision
+          ? await updateBomRevision(revision.id, formData)
+          : await createBomRevision(formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        if (!revision) idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(revision ? "Revisi BOM diperbarui" : "Revisi BOM dibuat")
+        router.push("/produksi/bom-revisi")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 

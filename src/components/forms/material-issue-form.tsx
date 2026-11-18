@@ -16,7 +16,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { FormActions } from "@/components/ui/form-section";
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 import {
   SCRAP_REASON_CODES,
@@ -211,7 +212,7 @@ export function MaterialIssueForm({
       try {
         const formData = buildMaterialIssueFormData({
           warehouseId,
-          date: issue?.date ?? toLocalDateOnly(new Date()),
+          date: issue?.date ?? wibDateOnly(new Date()),
           ...(issue?.id ? {} : { idempotencyKey: idempotencyKeyRef.current }),
           costCenterId,
           workOrderId,
@@ -354,7 +355,7 @@ export function MaterialIssueForm({
             onPress={addItem}
             variant="secondary"
             size="sm"
-            className="inline-flex items-center gap-1.5 min-h-9 px-3"
+            className="inline-flex items-center gap-1.5 min-h-11 md:min-h-9 px-3"
           >
             <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Material</span>
@@ -445,7 +446,7 @@ export function MaterialIssueForm({
                       }
                       aria-label={`Catatan scrap baris ${i + 1}`}
                       placeholder={item.scrapReasonCode === "lainnya" ? "Wajib diisi" : "Opsional"}
-                      className="h-9 text-xs"
+                      className="h-11 md:h-9 text-xs"
                     />
                   </td>
                   <td className="p-2 text-right font-mono tabular-nums">
@@ -462,7 +463,7 @@ export function MaterialIssueForm({
                         variant="danger-soft"
                         size="sm"
                         aria-label={`Hapus baris ${i + 1}`}
-                        className="min-h-9 px-2"
+                        className="min-h-11 md:min-h-9 px-2"
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
                       </Button>
@@ -475,14 +476,14 @@ export function MaterialIssueForm({
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">
           Batal
         </Button>
-        <Button type="submit" isDisabled={isPending} className="w-full sm:w-auto">
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">
           {isPending ? "Memproses..." : "Buat Pengeluaran Material"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }

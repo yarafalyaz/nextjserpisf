@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { createVehicleVariant, deleteVehicleVariant } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
@@ -35,33 +36,37 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
     const trimmed = name.trim()
     if (!trimmed) return
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("vehicleModelId", String(modelId))
-      formData.set("name", trimmed)
-      if (drivetrain) formData.set("drivetrain", drivetrain)
-      if (transmission) formData.set("transmission", transmission)
-      const result = await createVehicleVariant(formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menambah varian")
-        return
-      }
-      showSuccess("Varian ditambahkan")
-      setName("")
-      setDrivetrain(null)
-      setTransmission(null)
-      router.refresh()
+      await runUiAction(async () => {
+        const formData = new FormData()
+        formData.set("vehicleModelId", String(modelId))
+        formData.set("name", trimmed)
+        if (drivetrain) formData.set("drivetrain", drivetrain)
+        if (transmission) formData.set("transmission", transmission)
+        const result = await createVehicleVariant(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menambah varian")
+          return
+        }
+        showSuccess("Varian ditambahkan")
+        setName("")
+        setDrivetrain(null)
+        setTransmission(null)
+        router.refresh()
+      }, "Gagal menambah varian")
     })
   }
 
   function handleDelete(id: number) {
     startTransition(async () => {
-      const result = await deleteVehicleVariant(id)
-      if (!result.success) {
-        showError(result.error || "Gagal menghapus varian")
-        return
-      }
-      showSuccess("Varian dihapus")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await deleteVehicleVariant(id)
+        if (!result.success) {
+          showError(result.error || "Gagal menghapus varian")
+          return
+        }
+        showSuccess("Varian dihapus")
+        router.refresh()
+      }, "Gagal menghapus varian")
     })
   }
 

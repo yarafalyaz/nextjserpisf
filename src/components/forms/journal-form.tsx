@@ -12,9 +12,10 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { Plus, Trash2 } from "@/components/ui/fontawesome-icons"
 import { formatCurrencyExact } from "@/lib/utils/format"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface JournalFormProps {
   accounts: { id: number; code: string; name: string }[]
@@ -50,7 +51,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
         ],
   )
   const [description, setDescription] = useState(journal?.description ?? "")
-  const [date, setDate] = useState(journal?.date ?? toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(journal?.date ?? wibDateOnly(new Date()))
   const [accountOptions, setAccountOptions] = useState(accounts)
   // Pusat laba dipilih sekali per jurnal dan ditulis ke SETIAP entri. Tanpa ini
   // laporan pusat laba selalu menumpuk di "Tanpa Pusat Laba" walau masternya ada.
@@ -109,7 +110,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
@@ -161,7 +162,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
       <div style={{ marginTop: "24px" }}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h3 style={{ margin: 0, fontSize: "1rem" }} className="font-semibold text-foreground">Entri Jurnal</h3>
-          <Button type="button" onPress={addEntry} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-9 px-3">
+          <Button type="button" onPress={addEntry} variant="secondary" size="sm" className="inline-flex items-center gap-1.5 min-h-11 md:min-h-9 px-3">
             <Plus className="size-3.5" aria-hidden="true" />
             <span>Tambah Baris</span>
           </Button>
@@ -189,8 +190,8 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
                 </td>
                 <td className="p-2"><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="font-mono text-sm tabular-nums text-right" /></td>
                 <td className="p-2"><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="font-mono text-sm tabular-nums text-right" /></td>
-                <td className="p-2"><Input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} aria-label={`Memo baris ${i + 1}`} className="text-xs h-9" placeholder="Memo" /></td>
-                <td className="p-2 text-center">{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm" className="min-h-9 px-2"><Trash2 className="size-3.5" aria-hidden="true" /></Button>}</td>
+                <td className="p-2"><Input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} aria-label={`Memo baris ${i + 1}`} className="text-xs h-11 md:h-9" placeholder="Memo" /></td>
+                <td className="p-2 text-center">{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm" className="min-h-11 md:min-h-9 px-2"><Trash2 className="size-3.5" aria-hidden="true" /></Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -208,10 +209,10 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
       </div>
 
       <FormAttachmentUpload referenceType="journal" />
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending || !isBalanced} >{isPending ? "Menyimpan..." : journal?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending || !isBalanced} className="w-full md:w-auto">{isPending ? "Menyimpan..." : journal?.id ? "Perbarui" : "Simpan"}</Button>
+      </FormActions>
     </form>
   )
 }

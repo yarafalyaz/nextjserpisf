@@ -32,7 +32,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma, TxClient } from "@/lib/db/prisma"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { nextSlug } from "@/lib/utils/slug-db"
-import { computeQuotationTotals } from "@/lib/sales/quotation-totals"
+import { computeQuotationLine, computeQuotationTotals } from "@/lib/sales/quotation-totals"
 import { createDifferenceInvoice, createRevisionDownCredit } from "./sales.actions"
 import {
   reduceReservationsForWorkOrderItemTx,
@@ -57,9 +57,23 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : ""
 }
 
-function num(value: unknown, fallback = 0): number {
+function strictNum(value: unknown, label: string): number {
+  if (value === null || value === undefined || typeof value === "boolean") {
+    throw new Error(`${label} harus berupa angka yang valid`)
+  }
+  if (typeof value === "string" && value.trim() === "") {
+    throw new Error(`${label} harus berupa angka yang valid`)
+  }
   const n = Number(value)
-  return Number.isFinite(n) ? n : fallback
+  if (!Number.isFinite(n)) {
+    throw new Error(`${label} harus berupa angka yang valid`)
+  }
+  return n
+}
+
+function optionalNum(value: unknown, label: string): number | null {
+  if (value == null) return null
+  return strictNum(value, label)
 }
 
 type Tx = TxClient
@@ -123,18 +137,18 @@ function normalizeLines(raw: unknown): ChangeOrderLineInput[] {
   if (!Array.isArray(raw)) return []
   return raw.map((r: Record<string, unknown>, idx) => ({
     action: (cleanText(r.action) || "ubah") as ChangeOrderLineInput["action"],
-    workOrderItemId: r.workOrderItemId == null ? null : num(r.workOrderItemId),
-    itemId: num(r.itemId),
+    workOrderItemId: optionalNum(r.workOrderItemId, "ID baris perintah kerja"),
+    itemId: r.itemId == null ? 0 : strictNum(r.itemId, "ID item"),
     description: (r.description as string | null) ?? null,
     uom: (r.uom as string | null) ?? null,
-    qtyBefore: r.qtyBefore == null ? null : num(r.qtyBefore),
-    qtyAfter: r.qtyAfter == null ? null : num(r.qtyAfter),
-    costBefore: r.costBefore == null ? null : num(r.costBefore),
-    costAfter: r.costAfter == null ? null : num(r.costAfter),
-    unitPriceBefore: r.unitPriceBefore == null ? null : num(r.unitPriceBefore),
-    unitPriceAfter: r.unitPriceAfter == null ? null : num(r.unitPriceAfter),
-    discountBefore: r.discountBefore == null ? null : num(r.discountBefore),
-    discountAfter: r.discountAfter == null ? null : num(r.discountAfter),
+    qtyBefore: optionalNum(r.qtyBefore, "Qty sebelum"),
+    qtyAfter: optionalNum(r.qtyAfter, "Qty sesudah"),
+    costBefore: optionalNum(r.costBefore, "Biaya sebelum"),
+    costAfter: optionalNum(r.costAfter, "Biaya sesudah"),
+    unitPriceBefore: optionalNum(r.unitPriceBefore, "Harga satuan sebelum"),
+    unitPriceAfter: optionalNum(r.unitPriceAfter, "Harga satuan sesudah"),
+    discountBefore: optionalNum(r.discountBefore, "Diskon sebelum"),
+    discountAfter: optionalNum(r.discountAfter, "Diskon sesudah"),
     discountType: (r.discountType as string | null) ?? null,
     sortOrder: idx,
   })) as ChangeOrderLineInput[]
@@ -149,11 +163,22 @@ function validateLines(lines: ChangeOrderLineInput[]): void {
     if (line.action === "tambah") {
       if (line.workOrderItemId != null) throw new Error("Baris tambah tidak boleh menunjuk baris perintah kerja existing")
       if ((line.qtyAfter ?? 0) <= 0) throw new Error("Qty baris tambah wajib lebih dari 0")
+      if (line.unitPriceAfter == null) throw new Error("Harga satuan baris tambah wajib diisi")
     } else {
       if (line.workOrderItemId == null) throw new Error(`Baris ${line.action} wajib menunjuk baris perintah kerja`)
-      if (line.action === "ubah" && (line.qtyAfter ?? 0) <= 0) {
-        throw new Error("Qty baris ubah wajib lebih dari 0 – gunakan aksi hapus untuk menghilangkan baris")
+      if (line.action === "ubah") {
+        if ((line.qtyAfter ?? 0) <= 0) {
+          throw new Error("Qty baris ubah wajib lebih dari 0 – gunakan aksi hapus untuk menghilangkan baris")
+        }
+        if (line.unitPriceAfter == null) throw new Error("Harga satuan baris ubah wajib diisi")
       }
+    }
+    if (
+      line.discountType != null &&
+      line.discountType !== "" &&
+      !["fixed", "percent", "amount"].includes(line.discountType)
+    ) {
+      throw new Error(`Tipe diskon baris change order tidak valid: '${line.discountType}'`)
     }
     // Nilai after terisi (bukan null) tidak boleh negatif: 0 sah (baris
     // gratis), null sah (aksi hapus tak membawa nilai after). Negatif yang
@@ -251,7 +276,9 @@ export async function createJobChangeOrder(input: {
 }) {
   try {
     const user = await requirePermission("create_work_orders")
-    const workOrderId = num(input?.workOrderId)
+    const rawWorkOrderId: unknown = input?.workOrderId
+    const workOrderId =
+      rawWorkOrderId == null || rawWorkOrderId === "" ? 0 : strictNum(rawWorkOrderId, "ID Perintah Kerja")
     const reason = cleanText(input?.reason)
     if (!workOrderId) return { success: false, error: "Perintah Kerja wajib dipilih" }
     if (!reason) return { success: false, error: "Alasan perubahan wajib diisi" }
@@ -338,7 +365,7 @@ export async function updateJobChangeOrderLines(input: {
 }) {
   try {
     await requirePermission("edit_work_orders")
-    const changeOrderId = num(input?.changeOrderId)
+    const changeOrderId = strictNum(input?.changeOrderId, "ID Change Order")
     const requested = normalizeLines(input?.lines)
     validateLines(requested)
 
@@ -411,7 +438,7 @@ export async function updateJobChangeOrderLines(input: {
 export async function sendJobChangeOrder(changeOrderId: number) {
   try {
     const user = await requirePermission("edit_work_orders")
-    const id = num(changeOrderId)
+    const id = strictNum(changeOrderId, "ID Change Order")
 
     const sent = await prisma.$transaction(async (tx) => {
       // Putaran 69: bacaan pertama WAJIB locking read (lihat
@@ -479,7 +506,7 @@ export async function recordJobChangeOrderApproval(input: {
 }) {
   try {
     const user = await requirePermission("edit_work_orders")
-    const id = num(input?.changeOrderId)
+    const id = strictNum(input?.changeOrderId, "ID Change Order")
 
     await prisma.$transaction(async (tx) => {
       const co = await tx.jobChangeOrder.findUnique({ where: { id }, select: { id: true, status: true, documentNo: true } })
@@ -526,7 +553,7 @@ export async function recordJobChangeOrderApproval(input: {
 export async function cancelJobChangeOrder(input: { changeOrderId: number; reason: string }) {
   try {
     const user = await requirePermission("edit_work_orders")
-    const id = num(input?.changeOrderId)
+    const id = strictNum(input?.changeOrderId, "ID Change Order")
     const reason = cleanText(input?.reason)
     if (!reason) return { success: false, error: "Alasan pembatalan wajib diisi" }
 
@@ -551,13 +578,6 @@ export async function cancelJobChangeOrder(input: { changeOrderId: number; reaso
   }
 }
 
-/** Total baris quotation untuk persist (pola computeQuotationLine existing). */
-function computeLineTotalForPersist(q: { qty: number; unitPrice: number; discount: number }): number {
-  const qty = Math.max(0.01, Number(q.qty) || 0)
-  const lineSubtotal = qty * (Number(q.unitPrice) || 0)
-  return Math.max(0, Math.round((lineSubtotal - (Number(q.discount) || 0)) * 100) / 100)
-}
-
 /**
  * Terapkan CO disetujui. Satu tx baca-tulis: (1) klaim atomik
  * disetujui->diterapkan, (2) kunci baris WO+quotation, (3) kunci baris
@@ -573,7 +593,7 @@ function computeLineTotalForPersist(q: { qty: number; unitPrice: number; discoun
 export async function applyJobChangeOrder(changeOrderId: number) {
   try {
     const user = await requirePermission("complete_work_orders")
-    const id = num(changeOrderId)
+    const id = strictNum(changeOrderId, "ID Change Order")
 
     const applied = await prisma.$transaction(async (tx) => {
       // (1) Klaim atomik PALING AWAL: hanya pemenang disetujui->diterapkan
@@ -672,15 +692,26 @@ export async function applyJobChangeOrder(changeOrderId: number) {
         if (line.action === "tambah") {
           const firstSection = quotation.sections[0]
           if (!firstSection) throw new Error("Penawaran tidak punya section untuk baris tambah change order")
+          if (line.unitPriceAfter == null) {
+            throw new Error("Harga satuan baris tambah wajib diisi sebelum change order diterapkan")
+          }
+          const qty = strictNum(line.qtyAfter, "Qty sesudah")
+          const unitPrice = strictNum(line.unitPriceAfter, "Harga satuan sesudah")
+          const { discountAmount } = computeQuotationLine({
+            qty,
+            unitPrice,
+            discount: Number(line.discountAfter ?? 0),
+            discountType: line.discountType ?? "fixed",
+          })
           qItems.push({
             id: -1,
             sectionId: firstSection.id,
             itemId: line.itemId > 0 ? line.itemId : null,
             description: line.description,
             uom: line.uom,
-            qty: Number(line.qtyAfter),
-            unitPrice: Number(line.unitPriceAfter),
-            discount: Number(line.discountAfter ?? 0),
+            qty,
+            unitPrice,
+            discount: discountAmount,
             sortOrder: qItems.filter((q) => q.sectionId === firstSection.id).length,
             isNew: true,
             isDeleted: false,
@@ -702,9 +733,21 @@ export async function applyJobChangeOrder(changeOrderId: number) {
             target.isDeleted = true
             target.qty = 0
           } else {
-            target.qty = Number(line.qtyAfter)
-            target.unitPrice = Number(line.unitPriceAfter)
-            target.discount = Number(line.discountAfter ?? target.discount)
+            if (line.unitPriceAfter == null) {
+              throw new Error("Harga satuan baris ubah wajib diisi sebelum change order diterapkan")
+            }
+            const nextQty = strictNum(line.qtyAfter, "Qty sesudah")
+            const nextUnitPrice = strictNum(line.unitPriceAfter, "Harga satuan sesudah")
+            target.qty = nextQty
+            target.unitPrice = nextUnitPrice
+            const discountInput = line.discountAfter != null ? Number(line.discountAfter) : target.discount
+            const discountMode = line.discountAfter != null ? (line.discountType ?? "fixed") : "fixed"
+            target.discount = computeQuotationLine({
+              qty: nextQty,
+              unitPrice: nextUnitPrice,
+              discount: discountInput,
+              discountType: discountMode,
+            }).discountAmount
             if (line.description) target.description = line.description
           }
         }
@@ -758,7 +801,11 @@ export async function applyJobChangeOrder(changeOrderId: number) {
       // (6) Tulis baris quotation hasil terapan.
       for (const q of qItems) {
         if (q.isNew) {
-          const lineTotal = computeLineTotalForPersist(q)
+          const { discountAmount, total: lineTotal } = computeQuotationLine({
+            qty: q.qty,
+            unitPrice: q.unitPrice,
+            discount: q.discount,
+          })
           await tx.quotationItem.create({
             data: {
               sectionId: q.sectionId,
@@ -767,7 +814,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
               uom: q.uom,
               qty: q.qty,
               unitPrice: q.unitPrice,
-              discount: q.discount,
+              discount: discountAmount,
               total: lineTotal,
               sortOrder: q.sortOrder,
             },
@@ -775,13 +822,18 @@ export async function applyJobChangeOrder(changeOrderId: number) {
         } else if (q.isDeleted) {
           await tx.quotationItem.delete({ where: { id: q.id } })
         } else {
+          const { discountAmount, total: lineTotal } = computeQuotationLine({
+            qty: q.qty,
+            unitPrice: q.unitPrice,
+            discount: q.discount,
+          })
           await tx.quotationItem.update({
             where: { id: q.id },
             data: {
               qty: q.qty,
               unitPrice: q.unitPrice,
-              discount: q.discount,
-              total: computeLineTotalForPersist(q),
+              discount: discountAmount,
+              total: lineTotal,
               ...(q.description !== undefined ? { description: q.description } : {}),
             },
           })
@@ -906,7 +958,7 @@ export async function applyJobChangeOrder(changeOrderId: number) {
 export async function getJobChangeOrdersForWorkOrder(workOrderId: number) {
   await requirePermission("view_work_orders")
   const rows = await prisma.jobChangeOrder.findMany({
-    where: { workOrderId: num(workOrderId) },
+    where: { workOrderId: strictNum(workOrderId, "ID Perintah Kerja") },
     include: { items: { orderBy: { sortOrder: "asc" } } },
     orderBy: { sequence: "asc" },
   })

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { ShoppingCart } from "@/components/ui/fontawesome-icons"
 import { convertQuotationToOrder } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
@@ -25,18 +26,20 @@ export function ConvertQuotationButton({ quotationId }: { quotationId: number })
 
   function handleConvert() {
     startTransition(async () => {
-      const result = await convertQuotationToOrder(quotationId)
-      if (!result.success) {
-        showError(result.error || "Gagal mengonversi penawaran")
-        return
-      }
-      showSuccess("Penawaran dikonversi menjadi Pesanan Penjualan")
-      setIsOpen(false)
-      if (result.id) {
-        router.push(`/penjualan/pesanan/${result.id}`)
-      } else {
-        router.refresh()
-      }
+      await runUiAction(async () => {
+        const result = await convertQuotationToOrder(quotationId)
+        if (!result.success) {
+          showError(result.error || "Gagal mengonversi penawaran")
+          return
+        }
+        showSuccess("Penawaran dikonversi menjadi Pesanan Penjualan")
+        setIsOpen(false)
+        if (result.id) {
+          router.push(`/penjualan/pesanan/${result.id}`)
+        } else {
+          router.refresh()
+        }
+      }, "Gagal mengonversi penawaran")
     })
   }
 

@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppMonthPicker } from "@/components/ui/month-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 export interface Option {
   value: string
@@ -34,7 +34,7 @@ export function TaxPaymentForm({
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [period, setPeriod] = useState("")
   const [taxTypeId, setTaxTypeId] = useState("")
   const [taxAccountId, setTaxAccountId] = useState("")

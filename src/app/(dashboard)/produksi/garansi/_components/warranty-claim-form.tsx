@@ -9,7 +9,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { useWarrantySubmit } from "./warranty-submit"
 
 export interface WarrantyCoverageOption {
@@ -37,7 +37,7 @@ export function WarrantyClaimForm({
     "Gagal membuat klaim garansi",
   )
   const [coverageId, setCoverageId] = useState(defaultCoverageId ?? "")
-  const [reportedDate, setReportedDate] = useState(toLocalDateOnly(new Date()))
+  const [reportedDate, setReportedDate] = useState(wibDateOnly(new Date()))
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()

@@ -239,7 +239,7 @@ export function CalendarBoard({
         <button
           type="button"
           onClick={() => setActiveKind("all")}
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 min-h-9 font-medium whitespace-nowrap transition-colors cursor-pointer ${
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 min-h-11 md:min-h-9 font-medium whitespace-nowrap transition-colors cursor-pointer ${
             activeKind === "all"
               ? "border-primary bg-primary text-primary-foreground"
               : "border-default bg-surface text-foreground hover:bg-surface-muted"
@@ -256,7 +256,7 @@ export function CalendarBoard({
               key={kind}
               type="button"
               onClick={() => setActiveKind(isSelected ? "all" : kind)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 min-h-9 font-medium whitespace-nowrap transition-colors cursor-pointer ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 min-h-11 md:min-h-9 font-medium whitespace-nowrap transition-colors cursor-pointer ${
                 isSelected
                   ? "ring-2 ring-primary/40 " + KIND_STYLES[kind].chip
                   : KIND_STYLES[kind].chip + " hover:opacity-85"
@@ -295,17 +295,7 @@ export function CalendarBoard({
                   return (
                     <div
                       key={day.key}
-                      onClick={() => setSelectedDayKey(day.key)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          setSelectedDayKey(day.key)
-                        }
-                      }}
-                      aria-label={`Pilih tanggal ${day.fullDateLabel}, ${dayEvents.length} agenda`}
-                      className={`min-h-[54px] p-1 sm:min-h-[88px] sm:p-1.5 border-r border-default last:border-r-0 flex flex-col justify-between sm:justify-start gap-1 text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                      className={`min-h-[54px] p-1 sm:min-h-[88px] sm:p-1.5 border-r border-default last:border-r-0 flex flex-col justify-between sm:justify-start gap-1 text-left transition-colors ${
                         isSelected
                           ? "bg-primary/5 ring-1 ring-inset ring-primary/40"
                           : day.inMonth
@@ -313,57 +303,64 @@ export function CalendarBoard({
                             : "bg-surface-muted/40 hover:bg-surface-muted/60"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-0.5">
-                        <span
-                          className={`text-[11px] sm:text-xs font-semibold tabular-nums ${
-                            day.isToday
-                              ? "inline-flex size-5 sm:size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                              : day.inMonth
-                                ? "text-foreground"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {day.dayNumber}
-                        </span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayKey(day.key)}
+                        aria-pressed={isSelected}
+                        aria-label={`Pilih tanggal ${day.fullDateLabel}, ${dayEvents.length} agenda`}
+                        className="flex w-full min-h-11 sm:min-h-0 flex-col justify-between sm:justify-start gap-1 text-left cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <div className="flex items-center justify-between gap-0.5">
+                          <span
+                            className={`text-[11px] sm:text-xs font-semibold tabular-nums ${
+                              day.isToday
+                                ? "inline-flex size-5 sm:size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                                : day.inMonth
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
+                            }`}
+                          >
+                            {day.dayNumber}
+                          </span>
+                        </div>
+
+                        {dayEvents.length > 0 && (
+                          <div className="flex items-center gap-0.5 sm:hidden">
+                            {dayEvents.slice(0, 3).map((ev) => (
+                              <span
+                                key={`dot-${ev.id}`}
+                                className={`size-1.5 rounded-full ${
+                                  ev.kind === "holiday"
+                                    ? "bg-rose-500"
+                                    : ev.kind === "bill" || ev.kind === "bill-due"
+                                      ? "bg-red-500"
+                                      : ev.kind === "invoice-due"
+                                        ? "bg-amber-500"
+                                        : ev.kind === "delivery"
+                                          ? "bg-emerald-500"
+                                          : "bg-primary"
+                                }`}
+                              />
+                            ))}
+                            {dayEvents.length > 3 && (
+                              <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">
+                                +{dayEvents.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </button>
 
                       {dayEvents.slice(0, 3).map((event) => (
                         <Link
                           key={event.id}
                           href={event.href}
-                          onClick={(e) => e.stopPropagation()}
                           title={`${KIND_STYLES[event.kind].label}: ${event.label}${event.amount !== null ? ` - ${event.amountFormatted ?? formatCurrencyExact(event.amount)}` : ""}`}
                           className={`truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight max-sm:hidden hover:opacity-85 ${KIND_STYLES[event.kind].chip}`}
                         >
                           {event.label}
                         </Link>
                       ))}
-
-                      {dayEvents.length > 0 && (
-                        <div className="flex items-center gap-0.5 sm:hidden">
-                          {dayEvents.slice(0, 3).map((ev) => (
-                            <span
-                              key={`dot-${ev.id}`}
-                              className={`size-1.5 rounded-full ${
-                                ev.kind === "holiday"
-                                  ? "bg-rose-500"
-                                  : ev.kind === "bill" || ev.kind === "bill-due"
-                                    ? "bg-red-500"
-                                    : ev.kind === "invoice-due"
-                                      ? "bg-amber-500"
-                                      : ev.kind === "delivery"
-                                        ? "bg-emerald-500"
-                                        : "bg-primary"
-                              }`}
-                            />
-                          ))}
-                          {dayEvents.length > 3 && (
-                            <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">
-                              +{dayEvents.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      )}
 
                       {dayEvents.length > 3 && (
                         <span className="text-[11px] font-medium text-primary max-sm:hidden tabular-nums">

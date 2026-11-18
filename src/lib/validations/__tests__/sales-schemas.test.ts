@@ -4,6 +4,7 @@ import {
   createSalesOrderSchema,
   createSalesInvoiceSchema,
   createSalesPaymentSchema,
+  quotationItemPayloadSchema,
   updateQuotationSchema,
 } from "@/lib/validations/sales.schemas";
 
@@ -180,6 +181,16 @@ describe("validations/sales.schemas", () => {
         customerId: 2, date: "2026-06-09", notes: "Catatan",
       });
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe("quotationItemPayloadSchema (M5)", () => {
+    it("menolak qty <= 0, unitPrice negatif, dan nilai non-finite", () => {
+      expect(quotationItemPayloadSchema.safeParse({ qty: -5, unitPrice: 100_000 }).success).toBe(false);
+      expect(quotationItemPayloadSchema.safeParse({ qty: 0, unitPrice: 100_000 }).success).toBe(false);
+      expect(quotationItemPayloadSchema.safeParse({ qty: 1, unitPrice: -100 }).success).toBe(false);
+      expect(quotationItemPayloadSchema.safeParse({ qty: Number.POSITIVE_INFINITY, unitPrice: 100 }).success).toBe(false);
+      expect(quotationItemPayloadSchema.safeParse({ qty: 0.5, unitPrice: 100_000, discount: 0 }).success).toBe(true);
     });
   });
 });

@@ -332,22 +332,24 @@ export function computeAllocationNet(input: {
   snapshot: DownPaymentVatSnapshot
   dpAmount: number
 }): { netAmount: number; ppnPortion: number } {
-  const allocAmount = safeRound(input.allocAmount, 2)
-  if (input.snapshot.ppnUangMuka <= 0 || input.dpAmount <= 0) {
+  const allocAmount = Math.max(0, safeRound(input.allocAmount, 2))
+  if (input.snapshot.ppnUangMuka <= 0 || input.dpAmount <= 0 || allocAmount <= 0) {
     return { netAmount: allocAmount, ppnPortion: 0 }
   }
-  const cumulative = safeAdd(input.previouslyAllocated, allocAmount, 2)
+  const dpAmount = safeRound(input.dpAmount, 2)
+  const prev = Math.min(Math.max(0, safeRound(input.previouslyAllocated, 2)), dpAmount)
+  const cumulative = Math.min(dpAmount, safeAdd(prev, allocAmount, 2))
+  const priorPpn = safeRound((input.snapshot.ppnUangMuka * prev) / dpAmount, 2)
   const ppnPortion =
-    cumulative >= safeRound(input.dpAmount, 2)
-      ? safeSubtract(
-          input.snapshot.ppnUangMuka,
-          safeRound((input.snapshot.ppnUangMuka * safeRound(input.previouslyAllocated, 2)) / input.dpAmount, 2),
-          2,
-        )
-      : safeSubtract(
-          safeRound((input.snapshot.ppnUangMuka * cumulative) / input.dpAmount, 2),
-          safeRound((input.snapshot.ppnUangMuka * safeRound(input.previouslyAllocated, 2)) / input.dpAmount, 2),
-          2,
+    cumulative >= dpAmount
+      ? Math.max(0, safeSubtract(input.snapshot.ppnUangMuka, priorPpn, 2))
+      : Math.max(
+          0,
+          safeSubtract(
+            safeRound((input.snapshot.ppnUangMuka * cumulative) / dpAmount, 2),
+            priorPpn,
+            2,
+          ),
         )
   return { netAmount: safeSubtract(allocAmount, ppnPortion, 2), ppnPortion }
 }

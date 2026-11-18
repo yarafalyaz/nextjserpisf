@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { TAX_DISPUTE_STEP_KIND_LABELS, TAX_DISPUTE_PASAL36_SUBKIND_LABELS } from "./tax-dispute-labels"
 
 const KIND_OPTIONS = Object.entries(TAX_DISPUTE_STEP_KIND_LABELS).map(([value, label]) => ({
@@ -31,7 +31,7 @@ export function TaxDisputeStepForm({ assessmentId }: { assessmentId: number }) {
 
   const [kind, setKind] = useState("")
   const [article36Subkind, setArticle36Subkind] = useState("")
-  const [filedAt, setFiledAt] = useState(toLocalDateOnly(new Date()))
+  const [filedAt, setFiledAt] = useState(wibDateOnly(new Date()))
   const [lateReason, setLateReason] = useState("")
   const [evidenceRef, setEvidenceRef] = useState("")
 
@@ -58,7 +58,7 @@ export function TaxDisputeStepForm({ assessmentId }: { assessmentId: number }) {
         idempotencyKeyRef.current = crypto.randomUUID()
         setKind("")
         setArticle36Subkind("")
-        setFiledAt(toLocalDateOnly(new Date()))
+        setFiledAt(wibDateOnly(new Date()))
         setLateReason("")
         setEvidenceRef("")
         showSuccess("Upaya sengketa tersimpan")

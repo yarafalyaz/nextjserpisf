@@ -254,7 +254,7 @@ export const departmentHolidaySchema = z.object({
 export const statutoryRuleSchema = z.object({
   key: z.string().trim().min(1, "Kunci wajib diisi").max(64)
     .regex(/^[a-z0-9_]+$/, "Kunci hanya huruf kecil, angka, garis bawah"),
-  value: z.coerce.number({ error: "Nilai wajib diisi" }).finite(),
+  value: z.coerce.number({ error: "Nilai wajib diisi" }).finite().min(0, "Nilai tidak boleh negatif"),
   effectiveFrom: requiredDate("Berlaku sejak"),
   effectiveTo: optionalDate,
   source: optionalStr(255),

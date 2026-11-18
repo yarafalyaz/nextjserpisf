@@ -5,6 +5,7 @@ import { safeAdd } from "@/lib/utils/math"
 import { isRecurrenceFrequency, isWithinSchedule, nextRunAfter, type RecurrenceFrequency } from "@/lib/reports/recurring-schedule"
 import { assertAccountsExist } from "@/lib/hooks/accounting.hook"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service"
 
 export interface RecurringTemplate {
   accountId?: number | null
@@ -143,6 +144,12 @@ async function generateDocument(
         },
       },
     })
+    await requestApprovalIfConfigured(
+      "Journal",
+      journal.id,
+      userId ?? undefined,
+      db === prisma ? undefined : db,
+    )
     return `Jurnal ${journal.journalNumber}`
   }
 
@@ -156,7 +163,7 @@ async function generateDocument(
     await assertPeriodOpen(date, db.$queryRaw ? (db as TxClient) : undefined)
 
     const documentNo = await generateDocumentNumber("EXP")
-    await db.expense.create({
+    const expense = await db.expense.create({
       data: {
         documentNo,
         slug: await nextSlug("expense", documentNo),
@@ -171,6 +178,12 @@ async function generateDocument(
         createdBy: userId,
       },
     })
+    await requestApprovalIfConfigured(
+      "Expense",
+      expense.id,
+      userId ?? undefined,
+      db === prisma ? undefined : db,
+    )
     return `Beban ${documentNo}`
   }
 

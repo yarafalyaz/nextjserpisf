@@ -19,7 +19,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { toLocalDateOnly, wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 import {
   LateCostL3Field,
@@ -86,7 +86,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
   const [isPending, startTransition] = useTransition();
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
   const [vendorOptions, setVendorOptions] = useState(vendors);
-  const initialDate = bill?.date || toLocalDateOnly(new Date());
+  const initialDate = bill?.date || wibDateOnly(new Date());
   const [date, setDateState] = useState(initialDate);
   const [vendorId, setVendorIdState] = useState<string | null>(
     bill?.vendorId ? String(bill.vendorId) : null,
@@ -229,6 +229,25 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (
+      billItems.some(
+        (it) =>
+          !Number.isFinite(it.qty) ||
+          it.qty <= 0 ||
+          !Number.isFinite(it.unitPrice) ||
+          it.unitPrice < 0 ||
+          !Number.isFinite(it.discountPercent) ||
+          it.discountPercent < 0 ||
+          it.discountPercent > 100 ||
+          !Number.isFinite(it.taxPercent) ||
+          it.taxPercent < 0 ||
+          it.taxPercent > 100,
+      ) ||
+      grandTotal < 0
+    ) {
+      showError("Periksa jumlah (> 0), harga (>= 0), serta diskon/pajak (0-100%)");
+      return;
+    }
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
@@ -510,23 +529,19 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                           type="number"
                           aria-label={`Jumlah baris ${idx + 1}`}
                           value={String(item.qty)}
-                          onChange={(e) =>
-                            updateItem(
-                              idx,
-                              "qty",
-                              Number.isFinite(Number(e.target.value))
-                                ? Number(e.target.value)
-                                : 0,
-                            )
-                          }
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            updateItem(idx, "qty", Number.isFinite(n) ? Math.max(0, n) : 0);
+                          }}
                           min={1}
-                          className="w-full"
+                          step="any"
+                          className="w-full font-mono tabular-nums text-right"
                         />
                       </td>
                       <td className="py-2 px-2">
                         <CurrencyInput
                           value={item.unitPrice}
-                          onChange={(v) => updateItem(idx, "unitPrice", v)}
+                          onChange={(v) => updateItem(idx, "unitPrice", Math.max(0, v))}
                           min={0}
                           className="w-full"
                         />
@@ -536,19 +551,18 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                           type="number"
                           aria-label={`Diskon persen baris ${idx + 1}`}
                           value={String(item.discountPercent)}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
                             updateItem(
                               idx,
                               "discountPercent",
-                              Number.isFinite(Number(e.target.value))
-                                ? Number(e.target.value)
-                                : 0,
-                            )
-                          }
+                              Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0,
+                            );
+                          }}
                           min={0}
                           max={100}
                           step={0.01}
-                          className="w-full"
+                          className="w-full font-mono tabular-nums text-right"
                         />
                       </td>
                       <td className="py-2 px-2">
@@ -556,22 +570,21 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                           type="number"
                           aria-label={`Pajak persen baris ${idx + 1}`}
                           value={String(item.taxPercent)}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
                             updateItem(
                               idx,
                               "taxPercent",
-                              Number.isFinite(Number(e.target.value))
-                                ? Number(e.target.value)
-                                : 0,
-                            )
-                          }
+                              Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0,
+                            );
+                          }}
                           min={0}
                           max={100}
                           step={0.01}
-                          className="w-full"
+                          className="w-full font-mono tabular-nums text-right"
                         />
                       </td>
-                      <td className="py-2 px-2 text-right font-medium">
+                      <td className="py-2 px-2 text-right font-mono font-medium tabular-nums">
                         {calcLineTotal(item).toLocaleString("id-ID")}
                       </td>
                       <td className="py-2 px-2 text-center">
@@ -580,9 +593,11 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                             type="button"
                             onPress={() => removeItem(idx)}
                             aria-label={`Hapus baris ${idx + 1}`}
-                            className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
+                            variant="danger-soft"
+                            size="sm"
+                            className="min-h-11 min-w-11 md:min-h-9 md:min-w-9 p-2 text-danger"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 className="size-3.5" aria-hidden="true" />
                           </Button>
                         )}
                       </td>
@@ -597,7 +612,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                     >
                       Subtotal
                     </td>
-                    <td className="text-right py-2 px-2 font-medium">
+                    <td className="text-right py-2 px-2 font-mono font-medium tabular-nums">
                       {subtotal.toLocaleString("id-ID")}
                     </td>
                     <td></td>
@@ -610,7 +625,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                       >
                         Diskon
                       </td>
-                      <td className="text-right py-1 px-2 text-danger">
+                      <td className="text-right py-1 px-2 font-mono tabular-nums text-danger">
                         -{totalDiscount.toLocaleString("id-ID")}
                       </td>
                       <td></td>
@@ -624,7 +639,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                       >
                         Pajak
                       </td>
-                      <td className="text-right py-1 px-2">
+                      <td className="text-right py-1 px-2 font-mono tabular-nums">
                         {totalTax.toLocaleString("id-ID")}
                       </td>
                       <td></td>
@@ -637,7 +652,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
                     >
                       Total Keseluruhan
                     </td>
-                    <td className="text-right py-2 px-2 font-bold text-primary">
+                    <td className="text-right py-2 px-2 font-mono font-bold tabular-nums text-primary">
                       {grandTotal.toLocaleString("id-ID")}
                     </td>
                     <td></td>

@@ -227,6 +227,18 @@ describe("penjaga non-angka vonis §6", () => {
     ])
   })
 
+  it("regresi H6: getTerBrackets menormalisasi timestamp WIB 23:59:59.999 ke tengah malam UTC tanggal WIB", async () => {
+    const findMany = vi.fn().mockImplementation(async () => [])
+    const db = { payrollTerBracket: { findMany } }
+    await expect(getTerBrackets(db as never, "A", new Date("2026-02-28T16:59:59.999Z"))).resolves.toBeNull()
+    const observedWhere = ((findMany.mock.calls as unknown as Array<[{ where?: { effectiveFrom?: { lte: Date }; OR?: unknown } }]>)[0])[0].where
+    expect(observedWhere?.effectiveFrom?.lte).toEqual(new Date("2026-02-28T00:00:00.000Z"))
+    expect(observedWhere?.OR).toEqual([
+      { effectiveTo: null },
+      { effectiveTo: { gte: new Date("2026-02-28T00:00:00.000Z") } },
+    ])
+  })
+
   it("regresi slip lama: fungsi disetahunkan legacy tidak berubah hasil", () => {
     // Karakterisasi pra-F-026 (payroll-statutory.service.test.ts): kunci beku.
     expect(computePph21Monthly(10_000_000, "TK/0", 400_000)).toBe(230_000)

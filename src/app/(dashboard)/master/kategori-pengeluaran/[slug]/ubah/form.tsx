@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { updateExpenseCategory, deleteExpenseCategory } from "@/actions/expense-category.actions"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -26,11 +27,13 @@ export function EditForm({ category }: Props) {
   function doDelete() {
     setConfirmDelete(false)
     startTransition(async () => {
-      const result = await deleteExpenseCategory(category.id)
-      if (result && !result.success) { showError(result.error || "Gagal menghapus"); return }
-      showSuccess("Kategori berhasil dihapus")
-      router.push("/master/kategori-pengeluaran")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await deleteExpenseCategory(category.id)
+        if (result && !result.success) { showError(result.error || "Gagal menghapus"); return }
+        showSuccess("Kategori berhasil dihapus")
+        router.push("/master/kategori-pengeluaran")
+        router.refresh()
+      }, "Gagal menghapus")
     })
   }
 
@@ -38,11 +41,13 @@ export function EditForm({ category }: Props) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const result = await updateExpenseCategory(category.id, formData)
-      if (result && !result.success) { showError(result.error || "Gagal menyimpan"); return }
-      showSuccess("Kategori berhasil diperbarui")
-      router.push(`/master/kategori-pengeluaran/${category.slug ?? category.id}`)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await updateExpenseCategory(category.id, formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan"); return }
+        showSuccess("Kategori berhasil diperbarui")
+        router.push(`/master/kategori-pengeluaran/${category.slug ?? category.id}`)
+        router.refresh()
+      }, "Gagal menyimpan")
     })
   }
 

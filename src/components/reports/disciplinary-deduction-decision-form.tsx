@@ -10,6 +10,7 @@ import {
   SUSPENSION_PAY_TREATMENTS,
 } from "@/lib/reports/disciplinary-deduction"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -72,26 +73,28 @@ export function DisciplinaryDeductionDecisionForm({
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
-      const result = await createDisciplinaryDeductionDecisionAction({
-        documentNo: documentNo.trim(),
-        decidedAt,
-        employeeId: Number(employeeId),
-        disciplinaryRecordId: recordId ? Number(recordId) : null,
-        kind,
-        amount,
-        compensationAccountId: compensationAccountId ? Number(compensationAccountId) : null,
-        suspensionKind: suspensionKind || null,
-        suspensionPayTreatment: suspensionKind ? suspensionPayTreatment || null : null,
-        regulationReference: regulationReference.trim() || null,
-        signedBy: Number(signedBy),
-      })
-      if (!result.success) {
-        showError(result.error)
-        return
-      }
-      showSuccess("Dokumen keputusan potongan disiplin tersimpan")
-      router.push("/sdm/disiplin")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createDisciplinaryDeductionDecisionAction({
+          documentNo: documentNo.trim(),
+          decidedAt,
+          employeeId: Number(employeeId),
+          disciplinaryRecordId: recordId ? Number(recordId) : null,
+          kind,
+          amount,
+          compensationAccountId: compensationAccountId ? Number(compensationAccountId) : null,
+          suspensionKind: suspensionKind || null,
+          suspensionPayTreatment: suspensionKind ? suspensionPayTreatment || null : null,
+          regulationReference: regulationReference.trim() || null,
+          signedBy: Number(signedBy),
+        })
+        if (!result.success) {
+          showError(result.error)
+          return
+        }
+        showSuccess("Dokumen keputusan potongan disiplin tersimpan")
+        router.push("/sdm/disiplin")
+        router.refresh()
+      }, "Gagal menyimpan keputusan potongan disiplin")
     })
   }
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { setReimbursementClaimAccounts } from "@/actions/reimbursement.actions"
 import { approveExpense, rejectExpense, markExpensePaid } from "@/actions/finance.actions"
 
@@ -70,68 +71,76 @@ export function ReimbursementVerifyPanel({
       return
     }
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("accountId", expenseAccountId)
-      if (paidFromId) formData.set("paidFromAccountId", paidFromId)
-      const result = await setReimbursementClaimAccounts(expenseId, formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menetapkan akun klaim")
-        return
-      }
-      showSuccess("Akun klaim berhasil ditetapkan")
-      router.refresh()
+      await runUiAction(async () => {
+        const formData = new FormData()
+        formData.set("accountId", expenseAccountId)
+        if (paidFromId) formData.set("paidFromAccountId", paidFromId)
+        const result = await setReimbursementClaimAccounts(expenseId, formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menetapkan akun klaim")
+          return
+        }
+        showSuccess("Akun klaim berhasil ditetapkan")
+        router.refresh()
+      }, "Gagal menetapkan akun klaim")
     })
   }
 
   function handleApprove() {
     startTransition(async () => {
-      // Tetapkan akun final dulu (klaim draft), baru approve — satu alur
-      // verifikasi supaya J-RB1 memakai accountId final.
-      if (isDraft) {
-        if (!expenseAccountId) {
-          showError("Akun beban wajib dipilih sebelum menyetujui klaim")
+      await runUiAction(async () => {
+        // Tetapkan akun final dulu (klaim draft), baru approve — satu alur
+        // verifikasi supaya J-RB1 memakai accountId final.
+        if (isDraft) {
+          if (!expenseAccountId) {
+            showError("Akun beban wajib dipilih sebelum menyetujui klaim")
+            return
+          }
+          const formData = new FormData()
+          formData.set("accountId", expenseAccountId)
+          if (paidFromId) formData.set("paidFromAccountId", paidFromId)
+          const setResult = await setReimbursementClaimAccounts(expenseId, formData)
+          if (setResult && !setResult.success) {
+            showError(setResult.error || "Gagal menetapkan akun klaim")
+            return
+          }
+        }
+        const result = await approveExpense(expenseId)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyetujui klaim")
           return
         }
-        const formData = new FormData()
-        formData.set("accountId", expenseAccountId)
-        if (paidFromId) formData.set("paidFromAccountId", paidFromId)
-        const setResult = await setReimbursementClaimAccounts(expenseId, formData)
-        if (setResult && !setResult.success) {
-          showError(setResult.error || "Gagal menetapkan akun klaim")
-          return
-        }
-      }
-      const result = await approveExpense(expenseId)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menyetujui klaim")
-        return
-      }
-      showSuccess("Klaim disetujui")
-      router.refresh()
+        showSuccess("Klaim disetujui")
+        router.refresh()
+      }, "Gagal menyetujui klaim")
     })
   }
 
   function handleReject() {
     startTransition(async () => {
-      const result = await rejectExpense(expenseId)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menolak klaim")
-        return
-      }
-      showSuccess("Klaim ditolak")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await rejectExpense(expenseId)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menolak klaim")
+          return
+        }
+        showSuccess("Klaim ditolak")
+        router.refresh()
+      }, "Gagal menolak klaim")
     })
   }
 
   function handleMarkPaid() {
     startTransition(async () => {
-      const result = await markExpensePaid(expenseId)
-      if (result && !result.success) {
-        showError(result.error || "Gagal menandai klaim dibayar")
-        return
-      }
-      showSuccess("Klaim ditandai dibayar")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await markExpensePaid(expenseId)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menandai klaim dibayar")
+          return
+        }
+        showSuccess("Klaim ditandai dibayar")
+        router.refresh()
+      }, "Gagal menandai klaim dibayar")
     })
   }
 

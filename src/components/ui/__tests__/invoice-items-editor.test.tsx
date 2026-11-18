@@ -262,4 +262,78 @@ describe("InvoiceItemsEditor", () => {
     unmount(root)
     container.remove()
   })
+
+  it("H10: clamps negative qty, unitPrice, discount and out-of-range tax on change and rejects invalid totals on save", async () => {
+    const toastModule = await import("@/lib/utils/toast")
+    const showErrorSpy = vi.spyOn(toastModule, "showError").mockImplementation(() => undefined)
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    await act(async () => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={2}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={0}
+          editable={true}
+          availableItems={availableItems}
+          items={[
+            {
+              itemId: 1,
+              description: "Keyboard",
+              qty: 2,
+              unitPrice: 500000,
+              discount: 0,
+              total: 1000000,
+            },
+          ]}
+        />
+      )
+    })
+
+    const editBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Ubah Item"),
+    )
+    act(() => {
+      editBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+
+    const qtyInput = container.querySelector("#invoice-item-qty-0") as HTMLInputElement
+    const taxInput = container.querySelector("#invoice-tax-rate") as HTMLInputElement
+    expect(qtyInput).not.toBeNull()
+    expect(taxInput).not.toBeNull()
+
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    act(() => {
+      nativeSetter.call(qtyInput, "-5")
+      qtyInput.dispatchEvent(new Event("input", { bubbles: true }))
+      qtyInput.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    expect(Number(qtyInput.value)).toBeGreaterThanOrEqual(0)
+
+    act(() => {
+      nativeSetter.call(taxInput, "150")
+      taxInput.dispatchEvent(new Event("input", { bubbles: true }))
+      taxInput.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    expect(Number(taxInput.value)).toBe(100)
+
+    // Since qty was clamped to 0, saving must be rejected with showError
+    const saveBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Simpan",
+    )
+    await act(async () => {
+      saveBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(showErrorSpy).toHaveBeenCalledWith("Semua item harus memiliki produk dan qty > 0")
+
+    showErrorSpy.mockRestore()
+    unmount(root)
+    container.remove()
+  })
 })

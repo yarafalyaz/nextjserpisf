@@ -24,7 +24,7 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "@/components/ui/fontawesome-icons"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 // ==================== TYPES ====================
 
@@ -274,7 +274,7 @@ function SectionItemRow({
               }
             }}
             title={isCustomMode ? "Ubah ke Produk Master" : "Tambah Cepat Jasa Bebas"}
-            className={`p-1.5 rounded-lg border transition-all text-xs shrink-0 flex items-center justify-center ${
+            className={`min-h-11 min-w-11 md:min-h-9 md:min-w-9 p-1.5 rounded-lg border transition-all text-xs shrink-0 flex items-center justify-center ${
               isCustomMode 
                 ? (watchedItem?.uom === "JASA"
                     ? "bg-warning-soft border-warning text-warning-soft-foreground font-bold"
@@ -289,7 +289,7 @@ function SectionItemRow({
             <Input
               {...register(`${prefix}.description`)}
               aria-label={`Nama item baris ${itemIndex + 1}`}
-              className="w-full font-medium h-9 text-xs"
+              className="w-full font-medium h-11 md:h-9 text-xs"
               placeholder="Ketik nama jasa bebas..."
               onChange={(e) => {
                 setValue(`${prefix}.description`, e.target.value)
@@ -324,7 +324,7 @@ function SectionItemRow({
         <Input
           {...register(`${prefix}.description`)}
           aria-label={`Deskripsi baris ${itemIndex + 1}`}
-          className="h-9 text-xs"
+          className="h-11 md:h-9 text-xs"
           placeholder="Catatan / spek tambahan..."
           disabled={isCustomMode} // Di mode jasa, kolom deskripsi sudah menyatu di kolom utama
         />
@@ -336,9 +336,10 @@ function SectionItemRow({
           min="0.01"
           aria-label={`Jumlah baris ${itemIndex + 1}`}
           {...register(`${prefix}.qty`, { valueAsNumber: true })}
-          className="h-9 w-20 text-xs text-right font-mono tabular-nums"
+          className="h-11 md:h-9 w-20 text-xs text-right font-mono tabular-nums"
           onChange={(e) => {
-            setValue(`${prefix}.qty`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
+            const parsed = Number(e.target.value)
+            setValue(`${prefix}.qty`, Number.isFinite(parsed) ? Math.max(0, parsed) : 0)
             onRecalc(itemIndex)
           }}
         />
@@ -427,7 +428,7 @@ function SectionItemRow({
               max="100"
               aria-label={`Diskon persen baris ${itemIndex + 1}`}
               {...register(`${prefix}.discount`, { valueAsNumber: true })}
-              className="h-9 text-xs text-right font-mono tabular-nums flex-1"
+              className="h-11 md:h-9 text-xs text-right font-mono tabular-nums flex-1"
               onChange={(e) => {
                 const raw = Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0
                 const clamped = Math.min(100, Math.max(0, raw))
@@ -452,7 +453,7 @@ function SectionItemRow({
       <td>
         <div
           aria-label={`Total baris ${itemIndex + 1}`}
-          className="flex h-9 w-full items-center justify-end rounded-md border border-input bg-muted/40 px-2.5 text-xs font-mono font-semibold tabular-nums text-foreground"
+          className="flex h-11 md:h-9 w-full items-center justify-end rounded-md border border-input bg-muted/40 px-2.5 text-xs font-mono font-semibold tabular-nums text-foreground"
         >
           {formatCurrencyExact(watchedItem?.total || 0)}
         </div>
@@ -465,7 +466,7 @@ function SectionItemRow({
             aria-label={`Hapus item baris ${itemIndex + 1}`}
             variant="danger-soft"
             size="sm"
-            className="min-h-9 px-2"
+            className="min-h-11 md:min-h-9 px-2"
           >
             <Trash2 className="size-3.5" aria-hidden="true" />
           </Button>
@@ -582,8 +583,8 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
       : {
           customerId: undefined,
           customerVehicleId: undefined,
-          date: toLocalDateOnly(new Date()),
-          validUntil: toLocalDateOnly(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
+          date: wibDateOnly(new Date()),
+          validUntil: wibDateOnly(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
           subtotal: 0,
           discount: 0,
           tax: 0,
@@ -893,7 +894,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
               <Input
                 {...register(`sections.${sectionIndex}.name`)}
                 aria-label={`Nama bagian ${sectionIndex + 1}`}
-                className="section-name-input max-w-sm h-9 text-sm font-semibold"
+                className="section-name-input max-w-sm h-11 md:h-9 text-sm font-semibold"
                 placeholder="Nama Section (opsional)"
               />
               {sectionFields.length > 1 && (

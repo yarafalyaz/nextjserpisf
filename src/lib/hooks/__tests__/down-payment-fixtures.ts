@@ -85,6 +85,8 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
     salesOrder: { findFirst: vi.fn().mockResolvedValue({ id: 12 }), findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
     salesInvoice: {
       findFirst: mocks.salesInvoiceFindFirst ?? ((async () => null) as any),
+      findUnique: mocks.salesInvoiceFindUnique ?? ((async () => null) as any),
+      findUniqueOrThrow: mocks.salesInvoiceFindUniqueOrThrow ?? ((async () => null) as any),
       findMany: vi.fn().mockResolvedValue([]),
       create: mocks.salesInvoiceCreate ?? (async () => ({ id: 101, documentNo: "INV-1", date: new Date(Date.UTC(2026, 9, 1)) })),
       update: mocks.salesInvoiceUpdate ?? vi.fn(),
@@ -94,12 +96,19 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
       findFirst: mocks.salesPaymentFindFirst ?? vi.fn().mockResolvedValue(null),
       create: mocks.salesPaymentCreate,
     },
+    salesReturn: {
+      findMany: mocks.salesReturnFindMany ?? vi.fn().mockResolvedValue([]),
+    },
     systemSetting: { findFirst: mocks.systemSettingFindFirst ?? vi.fn() },
     journal: {
       findFirst: mocks.journalFindFirst ?? vi.fn().mockResolvedValue(null),
+      findMany: mocks.journalFindMany ?? vi.fn().mockResolvedValue([]),
       create: mocks.journalCreate ?? vi.fn(),
     },
-    account: { findMany: mocks.accountFindMany ?? vi.fn().mockResolvedValue([]) },
+    account: {
+      findMany: mocks.accountFindMany ?? vi.fn().mockResolvedValue([]),
+      findFirst: mocks.accountFindFirst ?? vi.fn().mockResolvedValue(null),
+    },
     customerCredit: {
       create: vi.fn().mockResolvedValue({ id: 777, documentNo: "CC-1" }),
       findFirst: vi.fn().mockResolvedValue(null),

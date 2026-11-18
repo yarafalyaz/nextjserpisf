@@ -31,6 +31,11 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
+    warrantyCoverage: buildModelMock(),
+    installedPart: buildModelMock(),
+    salesOrder: buildModelMock(),
+    deliveryOrder: buildModelMock(),
+    deliveryOrderItem: buildModelMock(),
     employee: buildModelMock(),
     materialIssue: buildModelMock(),
     // Putaran 126: penurunan WO in_progress -> pending melepas reservasi aktif.
@@ -2151,5 +2156,86 @@ describe("RAB F-030 — A7 ganti sumber terkunci + deleteProject ber-RAB", () =>
     expect(mocks.prismaMock.approval.deleteMany).toHaveBeenCalledWith({
       where: { referenceType: "Project", referenceId: 10 },
     })
+  })
+
+  it("regresi H5: syncProjectStatus melepas reservasi, melahirkan garansi/installed-part, dan membuat DO saat WO diselesaikan", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }])
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
+      id: 99,
+      status: "in_progress",
+      customerVehicleId: 77,
+    })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 1 })
+    mocks.prismaMock.nonconformance = { count: vi.fn().mockResolvedValue(0) }
+    mocks.prismaMock.qcInspection = {
+      findMany: vi.fn().mockResolvedValue([{ id: 5, status: "passed" }]),
+      count: vi.fn().mockResolvedValue(0),
+    }
+    mocks.prismaMock.materialIssue.findMany.mockResolvedValue([
+      { items: [{ id: 501, itemId: 10, qty: 2, serialNumbers: null }] },
+    ])
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 10, name: "Winch", sku: "W-1", warrantyMonths: 12 },
+    ])
+    mocks.prismaMock.warrantyCoverage.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 901, itemId: 10, serialNumber: null }])
+    mocks.prismaMock.warrantyCoverage.create.mockResolvedValue({ id: 901 })
+    mocks.prismaMock.installedPart.findMany.mockResolvedValue([])
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 99,
+      documentNo: "WO-099",
+      customerId: 15,
+      quotationId: 50,
+      items: [{ id: 1, itemId: 10, qty: 2, description: "Winch" }],
+      customer: { id: 15 },
+    })
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 300 })
+    mocks.prismaMock.deliveryOrder.create.mockResolvedValue({ id: 400 })
+
+    await actions.syncProjectStatus(1)
+
+    expect(mocks.prismaMock.stockReservation.updateMany).toHaveBeenCalledWith({
+      where: { workOrderId: 99, status: "active" },
+      data: expect.objectContaining({
+        status: "released",
+        releasedBy: 1,
+        releaseReason: "Perintah kerja selesai",
+      }),
+    })
+    expect(mocks.prismaMock.warrantyCoverage.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.installedPart.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.deliveryOrder.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.deliveryOrderItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ deliveryOrderId: 400, itemId: 10, qty: 2 })],
+    })
+    expect(mocks.revalidateMock).toHaveBeenCalledWith("/pengiriman")
+    delete mocks.prismaMock.nonconformance
+    delete mocks.prismaMock.qcInspection
+  })
+
+  it("regresi H5: klaim kalah (count===0) pada syncProjectStatus tidak menjalankan efek samping penyelesaian WO", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }])
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress", customerVehicleId: 77 })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValueOnce({ count: 0 })
+    mocks.prismaMock.nonconformance = { count: vi.fn().mockResolvedValue(0) }
+    mocks.prismaMock.qcInspection = {
+      findMany: vi.fn().mockResolvedValue([{ id: 5, status: "passed" }]),
+      count: vi.fn().mockResolvedValue(0),
+    }
+
+    await actions.syncProjectStatus(1)
+
+    expect(mocks.prismaMock.workOrderItem.updateMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.stockReservation.updateMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.warrantyCoverage.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.installedPart.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.deliveryOrder.create).not.toHaveBeenCalled()
+    delete mocks.prismaMock.nonconformance
+    delete mocks.prismaMock.qcInspection
   })
 })

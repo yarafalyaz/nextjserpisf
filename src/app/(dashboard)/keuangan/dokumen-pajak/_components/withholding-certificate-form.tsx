@@ -15,7 +15,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { AppMonthPicker } from "@/components/ui/month-picker"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { useTaxDocSubmit, useTaxDocAction, type TaxOption } from "./tax-doc-submit"
 import {
   Building2,
@@ -59,7 +59,7 @@ export function WithholdingCertificateForm({
     "/keuangan/dokumen-pajak/bupot",
   )
   const [direction, setDirection] = useState("we_withhold")
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [linkId, setLinkId] = useState("")
   const [dpp, setDpp] = useState<number | null>(null)
   const [counterpartyName, setCounterpartyName] = useState("")

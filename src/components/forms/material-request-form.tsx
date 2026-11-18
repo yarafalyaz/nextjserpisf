@@ -259,14 +259,14 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
             type="button"
             variant="outline"
             onPress={() => router.back()}
-            className="w-full sm:w-auto h-9 text-xs"
+            className="w-full md:w-auto min-h-11 md:min-h-9 md:h-9 text-xs"
           >
             Batal
           </Button>
           <Button
             type="submit"
             isDisabled={isPending}
-            className="w-full sm:w-auto h-9 text-xs"
+            className="w-full md:w-auto min-h-11 md:min-h-9 md:h-9 text-xs"
           >
             {isPending ? "Menyimpan..." : request?.id ? "Perbarui Permintaan" : "Simpan Permintaan"}
           </Button>

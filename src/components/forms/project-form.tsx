@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface CustomerVehicleOption {
   id: number
@@ -186,10 +187,10 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan proyek..." defaultValue={project?.notes || ""} />
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
-        <Button type="submit" isDisabled={isPending} className="w-full sm:w-auto">{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Proyek"}</Button>
-      </div>
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} className="w-full md:w-auto">{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Proyek"}</Button>
+      </FormActions>
     </form>
   )
 }

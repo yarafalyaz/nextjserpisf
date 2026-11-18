@@ -5,6 +5,7 @@ import { useTransition } from "react"
 
 import { createAttendanceCorrection } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -39,15 +40,17 @@ export function AttendanceCorrectionForm({
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await createAttendanceCorrection(new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal mengajukan koreksi absensi")
-        return
-      }
-      showSuccess("Pengajuan koreksi absensi terkirim")
-      form.reset()
-      router.push("/sdm/absensi/koreksi")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await createAttendanceCorrection(new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal mengajukan koreksi absensi")
+          return
+        }
+        showSuccess("Pengajuan koreksi absensi terkirim")
+        form.reset()
+        router.push("/sdm/absensi/koreksi")
+        router.refresh()
+      }, "Gagal mengajukan koreksi absensi")
     })
   }
 

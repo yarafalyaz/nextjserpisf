@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { resolveNonconformance } from "@/actions/qc.actions"
 import { showError, showProcessResult } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -54,15 +55,17 @@ export function NonconformanceResolveForm({
     formData.set("status", status)
 
     startTransition(async () => {
-      const result = await resolveNonconformance(ncrId, formData)
-      if (result && !result.success) {
-        showError(result.error || "Gagal memperbarui NCR")
-        return
-      }
-      // PO completed: resolusi tersimpan tapi biaya rework tidak masuk HPP —
-      // warning server tampil apa adanya, bukan sukses polos.
-      showProcessResult(result, "NCR diperbarui")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await resolveNonconformance(ncrId, formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal memperbarui NCR")
+          return
+        }
+        // PO completed: resolusi tersimpan tapi biaya rework tidak masuk HPP —
+        // warning server tampil apa adanya, bukan sukses polos.
+        showProcessResult(result, "NCR diperbarui")
+        router.refresh()
+      }, "Gagal memperbarui NCR")
     })
   }
 

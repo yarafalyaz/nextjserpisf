@@ -21,7 +21,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface PRFormProps {
@@ -74,13 +74,13 @@ export function PurchaseRequestForm({
   const [date, setDate] = useState(
     request?.date
       ? new Date(request.date).toISOString().split("T")[0]
-      : toLocalDateOnly(new Date()),
+      : wibDateOnly(new Date()),
   );
   const [notes, setNotes] = useState(request?.notes || "");
   const [requestDate, setRequestDate] = useState(
     request?.requestDate
       ? new Date(request.requestDate).toISOString().split("T")[0]
-      : toLocalDateOnly(new Date()),
+      : wibDateOnly(new Date()),
   );
   const [description, setDescription] = useState(request?.description || "");
   const [prItems, setPrItems] = useState<PRItem[]>(
@@ -345,7 +345,7 @@ export function PurchaseRequestForm({
                             type="button"
                             onPress={() => removeItem(i)}
                             aria-label={`Hapus baris ${i + 1}`}
-                            className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
+                            className="min-h-11 min-w-11 md:min-h-9 md:min-w-9 p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             <Trash2 size={14} />
                           </Button>

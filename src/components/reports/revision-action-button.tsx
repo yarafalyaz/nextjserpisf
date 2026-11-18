@@ -4,6 +4,7 @@ import type { ComponentType } from "react"
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 
 type RevisionActionResult = { success: boolean; error?: string; slug?: string | null; id?: number }
@@ -49,21 +50,23 @@ export function RevisionActionButton({
 
   function handleClick() {
     startTransition(async () => {
-      const result = await action(quotationId)
-      if (!result.success) {
-        showError(result.error || errorMessage)
-        return
-      }
-      if (!silentSuccess) {
-        showSuccess(successMessage)
-      }
-      if (onSuccess) {
-        onSuccess(router, result)
-      } else if (result.slug) {
-        router.push(`/penjualan/faktur/${result.slug}`)
-      } else {
-        router.refresh()
-      }
+      await runUiAction(async () => {
+        const result = await action(quotationId)
+        if (!result.success) {
+          showError(result.error || errorMessage)
+          return
+        }
+        if (!silentSuccess) {
+          showSuccess(successMessage)
+        }
+        if (onSuccess) {
+          onSuccess(router, result)
+        } else if (result.slug) {
+          router.push(`/penjualan/faktur/${result.slug}`)
+        } else {
+          router.refresh()
+        }
+      }, errorMessage)
     })
   }
 

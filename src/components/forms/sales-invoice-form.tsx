@@ -18,7 +18,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatCurrencyExact } from "@/lib/utils/format"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { AlertCircle } from "@/components/ui/fontawesome-icons"
@@ -149,7 +149,7 @@ export function SalesInvoiceForm({
     defaultValues: {
       customerId: invoice?.customerId ?? defaultCustomerId,
       salesOrderId: invoice?.salesOrderId ?? defaultSalesOrderId ?? undefined,
-      date: invoice?.date ?? toLocalDateOnly(new Date()),
+      date: invoice?.date ?? wibDateOnly(new Date()),
       dueDate: invoice?.dueDate ?? "",
       taxInvoiceNumber: invoice?.taxInvoiceNumber ?? "",
       notes: invoice?.notes ?? "",
@@ -173,9 +173,8 @@ export function SalesInvoiceForm({
     }
 
     const [year, month, day] = invoiceDate.split("-").map(Number)
-    const due = new Date(year, month - 1, day)
-    due.setDate(due.getDate() + customer.paymentTermDays)
-    setValue("dueDate", toLocalDateOnly(due))
+    const due = new Date(Date.UTC(year, month - 1, day + customer.paymentTermDays))
+    setValue("dueDate", wibDateOnly(due))
   }, [customerId, customerOptions, invoiceDate, setValue])
 
   const subtotal = rows.reduce((sum, row) => sum + lineTotal(row), 0)
@@ -220,6 +219,13 @@ export function SalesInvoiceForm({
               : {}),
           }))
         if (payload.length === 0) throw new Error("Tambahkan minimal satu baris barang")
+        if (payload.some((row) => row.qty <= 0 || row.unitPrice < 0 || row.discount < 0)) {
+          throw new Error("Jumlah harus > 0 dan harga/diskon tidak boleh negatif")
+        }
+        const safeTaxRate = Number(taxRate) || 0
+        if (safeTaxRate < 0 || safeTaxRate > 100) {
+          throw new Error("PPN (%) harus di antara 0 dan 100")
+        }
         formData.append("items", JSON.stringify(payload))
         formData.append("taxRate", String(Number(taxRate) || 0))
         // P2 idempotency UI: key stabil per intent create; retry/error pakai
@@ -323,31 +329,34 @@ export function SalesInvoiceForm({
                     </td>
                     <td className="py-2 pr-3">
                       <CurrencyInput
+                        min={0.01}
                         value={row.qty}
-                        onChange={(val) => updateRow(row.key, { qty: Number(val) || 0 })}
+                        onChange={(val) => updateRow(row.key, { qty: Math.max(0, Number(val) || 0) })}
                         aria-label={`Jumlah baris ${index + 1}`}
                       />
                     </td>
                     <td className="py-2 pr-3">
                       <CurrencyInput
+                        min={0}
                         value={row.unitPrice}
-                        onChange={(val) => updateRow(row.key, { unitPrice: Number(val) || 0 })}
+                        onChange={(val) => updateRow(row.key, { unitPrice: Math.max(0, Number(val) || 0) })}
                         aria-label={`Harga satuan baris ${index + 1}`}
                       />
                     </td>
                     <td className="py-2 pr-3">
                       <CurrencyInput
+                        min={0}
                         value={row.discount}
-                        onChange={(val) => updateRow(row.key, { discount: Number(val) || 0 })}
+                        onChange={(val) => updateRow(row.key, { discount: Math.max(0, Number(val) || 0) })}
                         aria-label={`Diskon baris ${index + 1}`}
                       />
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{formatCurrencyExact(lineTotal(row))}</td>
+                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{formatCurrencyExact(lineTotal(row))}</td>
                     <td className="py-2">
                       <button
                         type="button"
                         onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
-                        className="text-danger text-xs"
+                        className="inline-flex min-h-11 md:min-h-9 items-center px-2 text-danger text-xs"
                         aria-label={`Hapus baris ${index + 1}`}
                       >
                         Hapus
@@ -363,21 +372,23 @@ export function SalesInvoiceForm({
         <div className="mt-4 flex flex-col items-end gap-1.5 text-sm">
           <div className="flex items-center gap-3">
             <span className="text-muted-foreground">Subtotal</span>
-            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(subtotal)}</span>
+            <span className="font-mono tabular-nums w-32 text-right">{formatCurrencyExact(subtotal)}</span>
           </div>
           <div className="flex items-center gap-3">
             <Label htmlFor="taxRate">PPN (%)</Label>
             <CurrencyInput
               id="taxRate"
+              min={0}
+              max={100}
               value={taxRate}
-              onChange={(val) => setTaxRate(Number(val) || 0)}
+              onChange={(val) => setTaxRate(Math.min(100, Math.max(0, Number(val) || 0)))}
               className="w-24 text-right"
             />
-            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(taxAmount)}</span>
+            <span className="font-mono tabular-nums w-32 text-right">{formatCurrencyExact(taxAmount)}</span>
           </div>
           <div className="flex items-center gap-3 font-semibold">
             <span>Total</span>
-            <span className="tabular-nums w-32 text-right">{formatCurrencyExact(grandTotal)}</span>
+            <span className="font-mono tabular-nums w-32 text-right">{formatCurrencyExact(grandTotal)}</span>
           </div>
         </div>
       </div>

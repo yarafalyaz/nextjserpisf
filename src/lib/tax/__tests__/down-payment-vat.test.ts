@@ -251,4 +251,16 @@ describe("J-PL2 neto + J-RF1 proporsional sen-persis", () => {
       lines.find((l) => l.account === "salesTax")?.debit ?? 0
     expect(Math.round((ppn(first) + ppn(second)) * 100) / 100).toBe(s.ppnUangMuka)
   })
+
+  it("C2: computeAllocationNet clamps over-allocated previouslyAllocated so ppnPortion never goes negative", () => {
+    const s = snap(12_000_000)
+    const res = computeAllocationNet({
+      allocAmount: 6_000_000,
+      previouslyAllocated: 18_000_000,
+      snapshot: s,
+      dpAmount: 12_000_000,
+    })
+    expect(res.ppnPortion).toBe(0)
+    expect(res.netAmount).toBe(6_000_000)
+  })
 })

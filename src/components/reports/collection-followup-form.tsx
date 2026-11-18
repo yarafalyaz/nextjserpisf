@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/shadcn/dialog"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import {
   COLLECTION_CHANNELS,
   COLLECTION_OUTCOMES,
@@ -70,14 +71,16 @@ export function CollectionFollowUpForm({
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
-      const result = await createInvoiceCollectionFollowUp(formData)
-      if (!result.success) {
-        showError(result.error ?? "Gagal mencatat tindak lanjut.")
-        return
-      }
-      showSuccess("Tindak lanjut penagihan tercatat.")
-      setOpen(false)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createInvoiceCollectionFollowUp(formData)
+        if (!result.success) {
+          showError(result.error ?? "Gagal mencatat tindak lanjut.")
+          return
+        }
+        showSuccess("Tindak lanjut penagihan tercatat.")
+        setOpen(false)
+        router.refresh()
+      }, "Gagal mencatat tindak lanjut.")
     })
   }
 

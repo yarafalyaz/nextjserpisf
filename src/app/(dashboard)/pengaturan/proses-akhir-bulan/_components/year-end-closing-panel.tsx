@@ -16,6 +16,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { buildPathFilterHref } from "@/lib/utils/path-filters"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import type { YearEndClosingPreview } from "@/lib/reports/year-end-closing"
 
 /** Preview serializable dari RSC: closingDate dikirim sebagai ISO string. */
@@ -66,21 +67,26 @@ export function YearEndClosingPanel({
     setConfirming(null)
     setBusy(kind)
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("fiscalYear", String(preview.fiscalYear))
-      const result =
-        kind === "approval"
-          ? await requestYearEndClosingApprovalAction(formData)
-          : kind === "post"
-            ? await postYearEndClosingAction(formData)
-            : await reverseYearEndClosingAction(formData)
-      setBusy(null)
-      if (result.success) {
-        showSuccess(result.message ?? "Berhasil.")
-        router.refresh()
-      } else {
-        showError(result.error ?? "Gagal memproses penutup tahun.")
-      }
+      await runUiAction(
+        async () => {
+          const formData = new FormData()
+          formData.set("fiscalYear", String(preview.fiscalYear))
+          const result =
+            kind === "approval"
+              ? await requestYearEndClosingApprovalAction(formData)
+              : kind === "post"
+                ? await postYearEndClosingAction(formData)
+                : await reverseYearEndClosingAction(formData)
+          if (result.success) {
+            showSuccess(result.message ?? "Berhasil.")
+            router.refresh()
+          } else {
+            showError(result.error ?? "Gagal memproses penutup tahun.")
+          }
+        },
+        "Gagal memproses penutup tahun.",
+        () => setBusy(null),
+      )
     })
   }
 

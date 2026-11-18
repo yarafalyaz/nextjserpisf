@@ -2215,6 +2215,16 @@ describe("disposeAsset", () => {
     expect(String(fixed?.credit)).toBe("1000")
   })
 
+  it("M1: rejects proceeds with more than 2 decimal places or non-finite values", async () => {
+    const resSubSen = await disposeAsset(fd({ assetId: "100", proceeds: "100.123" }))
+    expect(resSubSen.success).toBe(false)
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+
+    const resInf = await disposeAsset(fd({ assetId: "100", proceeds: "Infinity" }))
+    expect(resInf.success).toBe(false)
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
   it("handles error on dispose asset", async () => {
     prismaMock.asset.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
     const res = await disposeAsset(fd({ assetId: "100" }))

@@ -5,6 +5,7 @@ import { Trash2 } from "@/components/ui/fontawesome-icons"
 import { clearActivityLog } from "@/actions/activity-log.actions"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { runUiAction } from "@/components/ui/async-action"
 
 export function ClearLogButton() {
   const [open, setOpen] = useState(false)
@@ -14,7 +15,9 @@ export function ClearLogButton() {
     // The action returns the deleted count, but `startTransition` requires a
     // void callback — discard it explicitly.
     startTransition(async () => {
-      await clearActivityLog()
+      await runUiAction(async () => {
+        await clearActivityLog()
+      }, "Gagal mengosongkan log aktivitas")
     })
     setOpen(false)
   }

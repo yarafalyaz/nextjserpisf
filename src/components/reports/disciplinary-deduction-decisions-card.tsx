@@ -4,6 +4,7 @@ import type {
 } from "@/lib/reports/disciplinary-deduction-data"
 import { ApplyDisciplinaryDeductionButton } from "@/components/reports/apply-disciplinary-deduction-button"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { wibPeriodKey } from "@/lib/utils/date-only"
 import {
   DetailTable,
   DetailTableHead,
@@ -44,7 +45,7 @@ export function DisciplinaryDeductionDecisionsCard({
   /** Periode payroll awal pada form "Terapkan ke Periode" (YYYY-MM). Default bulan berjalan. */
   defaultPeriod?: string
 }>) {
-  const periodeAwal = defaultPeriod ?? new Date().toISOString().slice(0, 7)
+  const periodeAwal = defaultPeriod ?? wibPeriodKey(new Date())
   return (
     <ReportCardShell
       label={DISC09_DECISIONS_TITLE}

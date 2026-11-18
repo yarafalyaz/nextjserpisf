@@ -19,7 +19,6 @@ import {
   expectDraftQueueSellerCells,
   expectDraftQueueSummary,
   expectExcludedDocuments,
-  expectNoQueueButtons,
 } from "./draft-queue-card-test-fixtures"
 
 // 2026-10-26 03:00 UTC = 10:00 WIB; hari WIB = 26 Okt 2026.
@@ -132,8 +131,9 @@ describe("SalesOrderDraftQueueCard F-2026-10-26-056-S", () => {
       "/penjualan/pesanan/pesanan-1",
       "/penjualan/pesanan/2",
     )
-    // Q-SOQ-4 MERAH: nol tombol Setujui/Batal/Kirim (nol button sama sekali).
-    expectNoQueueButtons(container)
+    // Q-SOQ-4 MERAH: nol tombol aksi Setujui/Batal/Kirim di antrean; tombol filter wajib semantic role="tab".
+    expect(container.querySelectorAll('button:not([role="tab"])')).toHaveLength(0)
+    expect(container.querySelectorAll('button[role="tab"]')).toHaveLength(3)
     expect(text).not.toContain("Setujui")
   })
 
@@ -149,6 +149,6 @@ describe("SalesOrderDraftQueueCard F-2026-10-26-056-S", () => {
     )
     roots.push(root)
     expect(container.textContent).toContain("Belum ada pesanan penjualan draft")
-    expectNoQueueButtons(container)
+    expect(container.querySelectorAll('button:not([role="tab"])')).toHaveLength(0)
   })
 })

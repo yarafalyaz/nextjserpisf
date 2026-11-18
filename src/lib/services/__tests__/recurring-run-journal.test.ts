@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   const accountFindMany = vi.fn()
   const generateDocumentNumber = vi.fn()
   const nextSlug = vi.fn()
+  const requestApprovalIfConfigured = vi.fn()
 
   const prisma: Record<string, unknown> = {
     journal: { findFirst: journalFindFirst, create: journalCreate },
@@ -49,9 +50,14 @@ const mocks = vi.hoisted(() => {
     accountFindMany,
     generateDocumentNumber,
     nextSlug,
+    requestApprovalIfConfigured,
     prisma,
   }
 })
+
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  requestApprovalIfConfigured: (...a: unknown[]) => mocks.requestApprovalIfConfigured(...a),
+}))
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
 
@@ -101,6 +107,8 @@ beforeEach(() => {
   mocks.nextSlug.mockResolvedValue("jrn-202610-00001")
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202610-00001" })
+  mocks.expenseCreate.mockResolvedValue({ id: 55, documentNo: "EXP-202610-00001" })
+  mocks.requestApprovalIfConfigured.mockResolvedValue({})
   // Gerbang akun hidup putaran 51: default semua akun template hidup.
   mocks.accountFindMany.mockImplementation(async (args: any) => (args.where.id.in as number[]).map((id) => ({ id })))
   mocks.scheduleUpdate.mockResolvedValue({})
@@ -394,5 +402,26 @@ describe("runDueRecurring — bookkeeping terikat klaim (race regresi)", () => {
       data: { isActive: false, lastResult: "Berakhir (melewati tanggal akhir)" },
     })
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("M2: runDueRecurring submits generated Journal and Expense drafts to approval workflow", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([journalSchedule(), expenseSchedule()])
+    mocks.expenseCreate.mockResolvedValue({ id: 77 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 12)
+
+    expect(result.errors).toEqual([])
+    expect(mocks.requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "Journal",
+      9,
+      12,
+      undefined,
+    )
+    expect(mocks.requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "Expense",
+      77,
+      12,
+      undefined,
+    )
   })
 })

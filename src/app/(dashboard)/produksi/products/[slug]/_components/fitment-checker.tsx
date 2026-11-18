@@ -9,6 +9,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { DataTable } from "@/components/ui/data-table"
 import { createColumnHelper } from "@/lib/table"
 import { showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 import { checkVehicleFitment } from "@/actions/vehicle-fitment.actions"
 
@@ -109,18 +110,20 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
 
   function check() {
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("productId", String(productId))
-      if (brandId) formData.set("vehicleBrandId", brandId)
-      if (modelId) formData.set("vehicleModelId", modelId)
-      if (variantId) formData.set("vehicleVariantId", variantId)
-      if (year) formData.set("year", year)
-      if (drivetrain) formData.set("drivetrain", drivetrain)
-      if (transmission) formData.set("transmission", transmission)
+      await runUiAction(async () => {
+        const formData = new FormData()
+        formData.set("productId", String(productId))
+        if (brandId) formData.set("vehicleBrandId", brandId)
+        if (modelId) formData.set("vehicleModelId", modelId)
+        if (variantId) formData.set("vehicleVariantId", variantId)
+        if (year) formData.set("year", year)
+        if (drivetrain) formData.set("drivetrain", drivetrain)
+        if (transmission) formData.set("transmission", transmission)
 
-      const res = await checkVehicleFitment(formData)
-      if (!res.success) return showError(res.error || "Gagal memeriksa kompatibilitas")
-      if (res.mode === "product") setLines(res.lines as FitmentLine[])
+        const res = await checkVehicleFitment(formData)
+        if (!res.success) return showError(res.error || "Gagal memeriksa kompatibilitas")
+        if (res.mode === "product") setLines(res.lines as FitmentLine[])
+      }, "Gagal memeriksa kompatibilitas")
     })
   }
 
@@ -209,6 +212,7 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
                 selectable={false}
                 enableColumnToggle={false}
                 enableExport={false}
+                showPagination={false}
                 pageSize={50}
               />
             )}

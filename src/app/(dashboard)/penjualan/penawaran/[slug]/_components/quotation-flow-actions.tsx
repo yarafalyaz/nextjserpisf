@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Send, CheckCircle, XCircle, FilePenLine } from "@/components/ui/fontawesome-icons"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { FormSelect } from "@/components/ui/form-select"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -52,13 +53,15 @@ export function QuotationFlowActions({
     gagal: string,
   ) {
     startTransition(async () => {
-      const result = await action()
-      if (result && result.success === false) {
-        showError(result.error || gagal)
-        return
-      }
-      showSuccess(sukses)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await action()
+        if (result && result.success === false) {
+          showError(result.error || gagal)
+          return
+        }
+        showSuccess(sukses)
+        router.refresh()
+      }, gagal)
     })
   }
 
@@ -68,15 +71,17 @@ export function QuotationFlowActions({
       return
     }
     startTransition(async () => {
-      const result = await reviseQuotation(id, reason.trim())
-      if (result && result.success === false) {
-        showError(result.error || "Gagal merevisi penawaran")
-        return
-      }
-      showSuccess("Penawaran direvisi")
-      setReason("")
-      setIsReviseOpen(false)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await reviseQuotation(id, reason.trim())
+        if (result && result.success === false) {
+          showError(result.error || "Gagal merevisi penawaran")
+          return
+        }
+        showSuccess("Penawaran direvisi")
+        setReason("")
+        setIsReviseOpen(false)
+        router.refresh()
+      }, "Gagal merevisi penawaran")
     })
   }
 
@@ -88,22 +93,24 @@ export function QuotationFlowActions({
       return
     }
     startTransition(async () => {
-      // Kategori dikirim sebagai awalan terstruktur pada `reason` existing;
-      // server membungkusnya ke description histori tanpa ubah kontrak aksi.
-      const reason = formatLostReasonReason({
-        category: lostCategory,
-        freeText: rejectReason.trim() || undefined,
-      })
-      const result = await rejectQuotation(id, reason)
-      if (result && result.success === false) {
-        showError(result.error || "Gagal menolak penawaran")
-        return
-      }
-      showSuccess("Penawaran ditolak")
-      setRejectReason("")
-      setLostCategory("")
-      setIsRejectOpen(false)
-      router.refresh()
+      await runUiAction(async () => {
+        // Kategori dikirim sebagai awalan terstruktur pada `reason` existing;
+        // server membungkusnya ke description histori tanpa ubah kontrak aksi.
+        const reason = formatLostReasonReason({
+          category: lostCategory,
+          freeText: rejectReason.trim() || undefined,
+        })
+        const result = await rejectQuotation(id, reason)
+        if (result && result.success === false) {
+          showError(result.error || "Gagal menolak penawaran")
+          return
+        }
+        showSuccess("Penawaran ditolak")
+        setRejectReason("")
+        setLostCategory("")
+        setIsRejectOpen(false)
+        router.refresh()
+      }, "Gagal menolak penawaran")
     })
   }
 

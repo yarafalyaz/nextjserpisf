@@ -41,18 +41,39 @@ export function computeQuotationTotals(data: QuotationTotalsInput): {
   return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
 }
 
+export function normalizeQuotationLineInput(item: QuotationLineInput): {
+  qty: number
+  unitPrice: number
+  rawDiscount: number
+  discountType: string
+} {
+  const parsedQty = Number(item.qty)
+  const qty = Math.max(0.01, Number.isFinite(parsedQty) ? parsedQty : 0)
+  const parsedUnitPrice = Number(item.unitPrice)
+  const unitPrice = Math.max(0, Number.isFinite(parsedUnitPrice) ? parsedUnitPrice : 0)
+  const parsedDiscount = Number(item.discount)
+  const rawDiscount = Math.max(0, Number.isFinite(parsedDiscount) ? parsedDiscount : 0)
+  return {
+    qty,
+    unitPrice,
+    rawDiscount,
+    discountType: item.discountType ?? "fixed",
+  }
+}
+
 /**
  * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
- * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
+ * Murni: clamp qty/harga/diskon anti-tamper, hitung via safe* decimal-safe.
  */
 export function computeQuotationLine(item: QuotationLineInput): { discountAmount: number; total: number } {
-  const qty = Math.max(0.01, Number(item.qty) || 0)
-  const unitPrice = Number(item.unitPrice) || 0
+  const { qty, unitPrice, rawDiscount, discountType } = normalizeQuotationLineInput(item)
   const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-  let discountAmount = Number(item.discount) || 0
-  if (item.discountType === "percent") {
-    const percent = Math.min(100, Math.max(0, discountAmount))
+  let discountAmount = rawDiscount
+  if (discountType === "percent") {
+    const percent = Math.min(100, rawDiscount)
     discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
+  } else {
+    discountAmount = Math.min(lineSubtotal, rawDiscount)
   }
   return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { matchReconciliationLine } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
@@ -43,15 +44,17 @@ export function MatchLineForm({
       return
     }
     startTransition(async () => {
-      const res = await matchReconciliationLine(reconciliationId, line, entry)
-      if (!res.success) {
-        showError(res.error || "Gagal mencocokkan baris")
-        return
-      }
-      showSuccess("Baris berhasil dicocokkan")
-      setLineId("")
-      setJournalEntryId("")
-      router.refresh()
+      await runUiAction(async () => {
+        const res = await matchReconciliationLine(reconciliationId, line, entry)
+        if (!res.success) {
+          showError(res.error || "Gagal mencocokkan baris")
+          return
+        }
+        showSuccess("Baris berhasil dicocokkan")
+        setLineId("")
+        setJournalEntryId("")
+        router.refresh()
+      }, "Gagal mencocokkan baris")
     })
   }
 

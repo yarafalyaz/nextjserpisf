@@ -13,6 +13,7 @@ import {
   voidDisciplinaryRecord,
 } from "@/actions/disciplinary.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Label } from "@/components/ui/shadcn/label"
@@ -65,14 +66,16 @@ export function DisciplinaryRecordActions({
 
   function run(promise: Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const result = await promise
-      if (!result.success) {
-        showError(result.error ?? "Gagal memproses")
-        return
-      }
-      showSuccess(ok)
-      setConfirm(null)
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await promise
+        if (!result.success) {
+          showError(result.error ?? "Gagal memproses")
+          return
+        }
+        showSuccess(ok)
+        setConfirm(null)
+        router.refresh()
+      }, "Gagal memproses")
     })
   }
 

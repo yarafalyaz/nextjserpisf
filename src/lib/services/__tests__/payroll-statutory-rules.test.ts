@@ -63,6 +63,11 @@ describe("getStatutoryParams (P1-6)", () => {
     ])
     const lastDay = await getStatutoryParams(db as never, new Date("2026-02-28T00:00:00Z"))
     expect(lastDay.bpjsJpCeiling).toBe(10_547_400)
+    // Regresi H6: timestamp akhir hari WIB (23:59:59.999 WIB = 16:59:59.999Z)
+    // pada hari terakhir masa tetap memakai baris effectiveTo UTC midnight itu.
+    const lastDayWibEnd = await getStatutoryParams(db as never, new Date("2026-02-28T16:59:59.999Z"))
+    expect(lastDayWibEnd.bpjsJpCeiling).toBe(10_547_400)
+    expect(lastDayWibEnd.asOf).toBe("2026-02-28")
     const nextDay = await getStatutoryParams(db as never, new Date("2026-03-01T00:00:00Z"))
     expect(nextDay.bpjsJpCeiling).toBe(11_086_300)
   })

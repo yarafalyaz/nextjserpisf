@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   systemSettingFindFirst: vi.fn(),
   journalFindFirst: vi.fn(),
+  journalFindMany: vi.fn(),
   journalCreate: vi.fn(),
   accountFindMany: vi.fn(),
   assertPeriodOpen: vi.fn(),
@@ -39,7 +40,9 @@ const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
   notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
+  onSalesPaymentUpdated: vi.fn(),
   assertInvoiceAllowed: vi.fn(),
+  salesReturnFindMany: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
@@ -50,6 +53,9 @@ vi.mock("@/lib/services/period-lock.service", async () => (await import("./down-
 vi.mock("@/lib/services/notification.service", async () => (await import("./down-payment-fixtures")).dpNotificationFactory(mocks))
 vi.mock("@/lib/hooks/accounting.hook", async () => (await import("./down-payment-fixtures")).dpAccountingFactory(mocks))
 vi.mock("@/lib/services/warranty-journal.service", async () => (await import("./down-payment-fixtures")).dpWarrantyFactory(mocks))
+vi.mock("@/lib/hooks/sales-payment.hook", () => ({
+  onSalesPaymentUpdated: (...a: unknown[]) => mocks.onSalesPaymentUpdated(...a),
+}))
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
@@ -101,8 +107,14 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     mocks.notifyDocumentsReadyBatch.mockResolvedValue(undefined)
     mocks.downPaymentUpdate.mockResolvedValue({})
     mocks.salesPaymentCreate.mockResolvedValue({ id: 555, amount: 500 })
+    mocks.salesPaymentFindMany.mockReset()
     mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 500 }])
     mocks.salesInvoiceUpdate.mockResolvedValue({})
+    mocks.salesReturnFindMany.mockReset()
+    mocks.salesReturnFindMany.mockResolvedValue([])
+    mocks.journalFindMany.mockReset()
+    mocks.journalFindMany.mockResolvedValue([])
+    mocks.onSalesPaymentUpdated.mockResolvedValue(undefined)
     mocks.workOrderFindFirst.mockResolvedValue({ id: 1 })
     mocks.salesOrderFindFirst.mockResolvedValue({ id: 1 })
     mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 100, grandTotal: 1000 })
@@ -317,6 +329,145 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
     })
     expect(tx.project.create.mock.invocationCallOrder[0]).toBeLessThan(
       tx.workOrder.create.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("C2: taxable DP allocated to UNPOSTED existing invoice posts Dr 210102 net / Cr AR net (no PPN credit, ignores unrelated invoice payments)", async () => {
+    const dp = {
+      ...buildDp({ id: 21, amount: 11_200_000, status: "draft", docNo: "DP-21" }),
+      vatTransactionCode: "04",
+      vatRate: 12,
+      vatDpp: 10_000_000,
+      vatAmount: 1_200_000,
+      vatTaxPeriod: "2026-10",
+    }
+    const tx = buildTx(dp, 100)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 100,
+      documentNo: "INV-100",
+      grandTotal: 25_000_000,
+      status: "draft",
+      paymentStatus: "posted",
+      date: new Date("2026-10-01T00:00:00Z"),
+      commissionRatePercent: null,
+    })
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      customerDownPaymentAccountId: 210102,
+      salesReceivableAccountId: 110,
+      salesTaxAccountId: 210201,
+    })
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+    )
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([{ amount: 5_000_000, notes: "Pelunasan tunai" }])
+      .mockResolvedValueOnce([{ amount: 5_000_000 }, { amount: 11_200_000 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(21, 1)
+
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+    const jData = mocks.journalCreate.mock.calls[0][0].data
+    expect(jData.totalDebit).toBe(10_000_000)
+    expect(jData.totalCredit).toBe(10_000_000)
+    const entries = jData.entries.create
+    expect(entries).toEqual([
+      expect.objectContaining({ accountId: 210102, debit: 10_000_000, credit: 0 }),
+      expect.objectContaining({ accountId: 110, debit: 0, credit: 10_000_000 }),
+    ])
+    expect(mocks.onSalesPaymentUpdated).not.toHaveBeenCalled()
+  })
+
+  it("C2 + M4: taxable DP allocated to POSTED existing invoice debits 210102 net + 210201 PPN / credits AR gross and delegates to onSalesPaymentUpdated", async () => {
+    const dp = {
+      ...buildDp({ id: 22, amount: 11_200_000, status: "draft", docNo: "DP-22" }),
+      vatTransactionCode: "04",
+      vatRate: 12,
+      vatDpp: 10_000_000,
+      vatAmount: 1_200_000,
+      vatTaxPeriod: "2026-10",
+    }
+    const tx = buildTx(dp, 100)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 100,
+      documentNo: "INV-100",
+      grandTotal: 25_000_000,
+      status: "posted",
+      paymentStatus: "posted",
+      date: new Date("2026-10-01T00:00:00Z"),
+      commissionRatePercent: null,
+    })
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      customerDownPaymentAccountId: 210102,
+      salesReceivableAccountId: 110,
+      salesTaxAccountId: 210201,
+    })
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+    )
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ amount: 11_200_000 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(22, 1)
+
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+    const jData = mocks.journalCreate.mock.calls[0][0].data
+    expect(jData.totalDebit).toBe(11_200_000)
+    expect(jData.totalCredit).toBe(11_200_000)
+    const entries = jData.entries.create
+    expect(entries).toEqual([
+      expect.objectContaining({ accountId: 210102, debit: 10_000_000, credit: 0 }),
+      expect.objectContaining({ accountId: 210201, debit: 1_200_000, credit: 0 }),
+      expect.objectContaining({ accountId: 110, debit: 0, credit: 11_200_000 }),
+    ])
+    expect(mocks.onSalesPaymentUpdated).toHaveBeenCalledWith(100, tx)
+  })
+
+  it("M4: existing invoice sales return credit limits DP allocation and settles invoice via totalPaid + returnCredit", async () => {
+    const dp = buildDp({ id: 23, amount: 800, status: "draft", docNo: "DP-23" })
+    const tx = buildTx(dp, 100)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 100,
+      documentNo: "INV-100",
+      grandTotal: 1000,
+      status: "draft",
+      paymentStatus: "partial",
+      date: new Date("2026-10-01T00:00:00Z"),
+      commissionRatePercent: null,
+    })
+    mocks.salesReturnFindMany.mockResolvedValue([{ id: 700, salesInvoiceId: 100 }])
+    mocks.journalFindMany.mockResolvedValue([{ referenceId: 700, entries: [{ credit: 400 }] }])
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      customerDownPaymentAccountId: 210102,
+      salesReceivableAccountId: 110,
+    })
+    mocks.accountFindMany.mockImplementation(async (args: any) =>
+      (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+    )
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ amount: 600 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(23, 1)
+
+    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: 600 }),
+      }),
+    )
+    expect((tx as any).customerCredit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ receivedAmount: 200 }),
+      }),
+    )
+    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 100 },
+        data: expect.objectContaining({ paidAmount: 600, paymentStatus: "paid" }),
+      }),
     )
   })
 })

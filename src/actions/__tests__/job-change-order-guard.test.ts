@@ -566,4 +566,106 @@ describe("applyJobChangeOrder — klaim + uang existing", () => {
     expect(qItemDeleteMock).not.toHaveBeenCalled()
     expect(qUpdateMock).not.toHaveBeenCalled()
   })
+
+  it("regresi H7: applyJobChangeOrder mengonversi diskon persen menjadi nominal IDR pada baris tambah & ubah", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [
+        {
+          id: 771,
+          workOrderItemId: 11,
+          itemId: 101,
+          action: "ubah",
+          description: "Winch 4.5t",
+          uom: "pcs",
+          qtyBefore: 1,
+          qtyAfter: 2,
+          costAfter: 50000,
+          unitPriceBefore: 50000,
+          unitPriceAfter: 1_000_000,
+          discountAfter: 10,
+          discountType: "percent",
+        },
+        {
+          id: 772,
+          workOrderItemId: null,
+          itemId: 300,
+          action: "tambah",
+          description: "Snorkel Kit",
+          uom: "pcs",
+          qtyBefore: null,
+          qtyAfter: 1,
+          costAfter: 500_000,
+          unitPriceBefore: null,
+          unitPriceAfter: 500_000,
+          discountAfter: 20,
+          discountType: "percent",
+        },
+      ],
+    })
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(true)
+    // Ubah baris 501: 2 * 1_000_000 - 10% (200_000) = 1_800_000
+    expect(qItemUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 501 },
+        data: expect.objectContaining({
+          qty: 2,
+          unitPrice: 1_000_000,
+          discount: 200_000,
+          total: 1_800_000,
+        }),
+      }),
+    )
+    // Tambah baris baru: 1 * 500_000 - 20% (100_000) = 400_000
+    expect(qItemCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          qty: 1,
+          unitPrice: 500_000,
+          discount: 100_000,
+          total: 400_000,
+        }),
+      }),
+    )
+    // Snorkel existing (10_000) + Winch baru (1_800_000) + Snorkel Kit (400_000) = 2_210_000
+    const qArg = qUpdateMock.mock.calls.at(-1)?.[0]
+    expect(qArg.data.grandTotal).toBe(2_210_000)
+  })
+
+  it("regresi H7: createJobChangeOrder menolak unitPriceAfter null pada tambah/ubah dan input non-finite (NaN/Infinity)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const nullTambah = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Tambah tanpa harga",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: 1, unitPriceAfter: null }],
+    })
+    expect(nullTambah.success).toBe(false)
+    expect(String(nullTambah.error)).toMatch(/Harga satuan baris tambah wajib diisi/)
+
+    const nullUbah = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Ubah tanpa harga",
+      lines: [{ action: "ubah", workOrderItemId: 11, itemId: 101, qtyAfter: 2, unitPriceAfter: null }],
+    })
+    expect(nullUbah.success).toBe(false)
+    expect(String(nullUbah.error)).toMatch(/Harga satuan baris ubah wajib diisi/)
+
+    const nanQty = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Qty NaN",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: Number.NaN, unitPriceAfter: 1000 }],
+    })
+    expect(nanQty.success).toBe(false)
+    expect(String(nanQty.error)).toMatch(/angka yang valid/)
+
+    const infPrice = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Harga Infinity",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: 1, unitPriceAfter: Number.POSITIVE_INFINITY }],
+    })
+    expect(infPrice.success).toBe(false)
+    expect(String(infPrice.error)).toMatch(/angka yang valid/)
+    expect(coCreateMock).not.toHaveBeenCalled()
+  })
 })

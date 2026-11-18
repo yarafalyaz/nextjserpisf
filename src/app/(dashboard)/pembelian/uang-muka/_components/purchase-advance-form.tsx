@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 export interface AccountOption {
   id: number
@@ -35,7 +35,7 @@ export function PurchaseAdvanceForm({
   const [isPending, startTransition] = useTransition()
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [vendorId, setVendorId] = useState("")
   const [amount, setAmount] = useState<number | null>(null)
   const [advanceAccountId, setAdvanceAccountId] = useState(

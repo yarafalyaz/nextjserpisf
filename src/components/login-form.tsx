@@ -161,7 +161,7 @@ export function LoginForm({
                   type="submit"
                   id="login-submit"
                   disabled={loading}
-                  className="w-full bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 hover:bg-zinc-900/90 dark:hover:bg-zinc-50/90 shadow transition-all font-medium h-9"
+                  className="w-full bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 hover:bg-zinc-900/90 dark:hover:bg-zinc-50/90 shadow transition-all font-medium min-h-11 md:min-h-9 md:h-9"
                 >
                   {loading ? (
                     <>

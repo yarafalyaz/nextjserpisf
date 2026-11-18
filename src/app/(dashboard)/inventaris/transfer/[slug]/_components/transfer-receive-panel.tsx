@@ -299,6 +299,7 @@ export function TransferReceivePanel({ transferId, status, lines, canCloseShorta
           selectable={false}
           enableColumnToggle={false}
           enableExport={false}
+          showPagination={false}
           pageSize={50}
         />
         <div className="flex flex-wrap items-center gap-3">

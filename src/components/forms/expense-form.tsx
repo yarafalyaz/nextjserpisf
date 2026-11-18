@@ -18,8 +18,9 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import {
   LateCostL3Field,
   parseL3TagClient,
@@ -70,7 +71,7 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
       projectId: expense.projectId ?? undefined,
       vendorId: expense.vendorId ?? undefined,
     } : {
-      date: toLocalDateOnly(new Date()),
+      date: wibDateOnly(new Date()),
       amount: 0,
       description: "",
       categoryId: undefined,
@@ -116,7 +117,7 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={expense?.id ? "Formulir ubah pengeluaran" : "Formulir tambah pengeluaran"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={expense?.id ? "Formulir ubah pengeluaran" : "Formulir tambah pengeluaran"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <FormGrid>
         <FormGroup>
           <Controller
@@ -320,12 +321,12 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
         </FormGroup>
       </FormGrid>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending}  id="submit-expense">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-expense" className="w-full md:w-auto">
           {isPending ? "Menyimpan..." : expense?.id ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

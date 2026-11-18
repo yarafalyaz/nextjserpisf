@@ -55,15 +55,20 @@ function parseId(raw: unknown): number | null {
   return Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
-function parseDate(raw: unknown): Date | null {
+function parseOptionalDateField(
+  raw: unknown,
+): { ok: true; date: Date | null } | { ok: false; error: string } {
   const str = String(raw ?? "").trim()
-  if (!str) return null
+  if (!str) return { ok: true, date: null }
   // Konvensi repo (dateOnly): nilai dulu sebagai tanggal kalender nyata —
   // `new Date("2026-02-30")` bergulir diam-diam ke 2 Mar dan tanggal efektif
-  // denda tercatat lain dari yang diketik operator.
+  // denda tercatat lain dari yang diketik operator; tanggal non-kosong tak
+  // valid wajib ditolak eksplisit, bukan diam-diam jatuh ke null/today.
   const parsed = dateOnly.safeParse(str)
-  if (!parsed.success) return null
-  return wibDateToUtcMidnight(parsed.data)
+  if (!parsed.success) {
+    return { ok: false, error: "Format tanggal tidak valid." }
+  }
+  return { ok: true, date: wibDateToUtcMidnight(parsed.data) }
 }
 
 function parseMoney(raw: unknown): number | null {
@@ -89,8 +94,12 @@ export async function createCustomerLateFeeTerm(
     const rate = parseMoney(formData.get("ratePercentPerDay"))
     const flat = parseMoney(formData.get("flatAmountPerDay"))
     const cap = parseMoney(formData.get("capAmount"))
-    const effectiveFrom = parseDate(formData.get("effectiveFrom"))
-    const effectiveTo = parseDate(formData.get("effectiveTo"))
+    const effectiveFromParsed = parseOptionalDateField(formData.get("effectiveFrom"))
+    if (!effectiveFromParsed.ok) return { success: false, error: effectiveFromParsed.error }
+    const effectiveToParsed = parseOptionalDateField(formData.get("effectiveTo"))
+    if (!effectiveToParsed.ok) return { success: false, error: effectiveToParsed.error }
+    const effectiveFrom = effectiveFromParsed.date
+    const effectiveTo = effectiveToParsed.date
 
     if ((rate == null) === (flat == null)) {
       return {
@@ -180,10 +189,12 @@ export async function issueSalesLateFee(formData: FormData): Promise<LateFeeActi
     const salesInvoiceId = parseId(formData.get("salesInvoiceId"))
     const termId = parseId(formData.get("termId"))
     const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim()
-    const date = parseDate(formData.get("date")) ?? new Date()
+    const dateParsed = parseOptionalDateField(formData.get("date"))
     if (salesInvoiceId == null) return { success: false, error: "Faktur tidak valid." }
     if (termId == null) return { success: false, error: "Syarat denda tidak valid." }
     if (!idempotencyKey) return { success: false, error: "Idempotency key wajib diisi." }
+    if (!dateParsed.ok) return { success: false, error: dateParsed.error }
+    const date = dateParsed.date ?? new Date()
 
     const result = await prisma.$transaction(async (tx) => {
       const fingerprint = payloadFingerprint({
@@ -336,7 +347,7 @@ export async function paySalesLateFee(formData: FormData): Promise<LateFeeAction
     const user = await requirePermission("create_sales_late_fees")
     const salesLateFeeId = parseId(formData.get("salesLateFeeId"))
     const amount = parseMoney(formData.get("amount"))
-    const paymentDate = parseDate(formData.get("paymentDate")) ?? new Date()
+    const paymentDateParsed = parseOptionalDateField(formData.get("paymentDate"))
     const paymentMethod = String(formData.get("paymentMethod") ?? "").trim()
     const accountId = parseId(formData.get("accountId"))
     const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim()
@@ -344,6 +355,8 @@ export async function paySalesLateFee(formData: FormData): Promise<LateFeeAction
     if (amount == null || amount <= 0) return { success: false, error: "Nominal pembayaran harus lebih dari nol." }
     if (!paymentMethod) return { success: false, error: "Metode pembayaran wajib diisi." }
     if (!idempotencyKey) return { success: false, error: "Idempotency key wajib diisi." }
+    if (!paymentDateParsed.ok) return { success: false, error: paymentDateParsed.error }
+    const paymentDate = paymentDateParsed.date ?? new Date()
 
     const result = await prisma.$transaction(async (tx) => {
       const fingerprint = payloadFingerprint({ salesLateFeeId, amount })
@@ -447,10 +460,12 @@ export async function reverseSalesLateFee(formData: FormData): Promise<LateFeeAc
     const salesLateFeeId = parseId(formData.get("salesLateFeeId"))
     const reason = String(formData.get("reason") ?? "").trim()
     const idempotencyKey = String(formData.get("idempotencyKey") ?? "").trim()
-    const date = parseDate(formData.get("date")) ?? new Date()
+    const dateParsed = parseOptionalDateField(formData.get("date"))
     if (salesLateFeeId == null) return { success: false, error: "Dokumen denda tidak valid." }
     if (!reason) return { success: false, error: "Alasan pembalikan wajib diisi." }
     if (!idempotencyKey) return { success: false, error: "Idempotency key wajib diisi." }
+    if (!dateParsed.ok) return { success: false, error: dateParsed.error }
+    const date = dateParsed.date ?? new Date()
 
     const result = await prisma.$transaction(async (tx) => {
       const fingerprint = payloadFingerprint({ salesLateFeeId, reason })

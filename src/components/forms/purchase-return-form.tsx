@@ -6,7 +6,7 @@ import { createPurchaseReturn, updatePurchaseReturn } from "@/actions/purchase.a
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Combobox } from "@/components/ui/combobox"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
 import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason, ReturnTaxNoteFields } from "@/components/forms/return-items-section"
 
@@ -40,7 +40,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData, receiptL
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(returnData?.date ?? wibDateOnly(new Date()))
   const [taxReturnNoteDate, setTaxReturnNoteDate] = useState(returnData?.taxReturnNoteDate ?? "")
   const [purchaseOrderId, setPurchaseOrderId] = useState(returnData?.purchaseOrderId ? String(returnData.purchaseOrderId) : "")
   // Seed returnItems from returnData on edit so updating a return doesn't

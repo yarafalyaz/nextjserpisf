@@ -378,9 +378,11 @@ html.dark .button.button--secondary {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.form-input:hover {
-  background: var(--bg-secondary);
-  border-color: color-mix(in srgb, var(--border-color), var(--text-muted) 24%);
+@media (hover: hover) {
+  .form-input:hover {
+    background: var(--bg-secondary);
+    border-color: color-mix(in srgb, var(--border-color), var(--text-muted) 24%);
+  }
 }
 
 .form-input:focus,
@@ -432,13 +434,15 @@ html.dark table tr {
   background: transparent;
 }
 
-html.dark table tr:hover td {
-  background: var(--bg-tertiary);
-}
+@media (hover: hover) {
+  html.dark table tr:hover td {
+    background: var(--bg-tertiary);
+  }
 
-html.dark .header-logout-btn:hover,
-html.dark .header-dropdown-danger:hover {
-  background: rgba(248, 113, 113, 0.1);
+  html.dark .header-logout-btn:hover,
+  html.dark .header-dropdown-danger:hover {
+    background: rgba(248, 113, 113, 0.1);
+  }
 }
 
 /* Custom Search Field */
@@ -488,17 +492,21 @@ html.dark .btn-secondary {
   border-color: var(--border-color);
 }
 
-html.dark .btn-secondary:hover {
-  background: var(--bg-secondary);
+@media (hover: hover) {
+  html.dark .btn-secondary:hover {
+    background: var(--bg-secondary);
+  }
 }
 
 html.dark .btn-ghost {
   color: var(--text-secondary);
 }
 
-html.dark .btn-ghost:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+@media (hover: hover) {
+  html.dark .btn-ghost:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
 }
 
 /* Tables - only for custom HTML tables, not HeroUI Table */
@@ -511,8 +519,10 @@ html.dark .breadcrumbs a {
   color: var(--text-secondary);
 }
 
-html.dark .breadcrumbs a:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  html.dark .breadcrumbs a:hover {
+    color: var(--text-primary);
+  }
 }
 
 html.dark .breadcrumbs span {
@@ -545,8 +555,10 @@ html.dark .tab-btn {
   color: var(--text-secondary);
 }
 
-html.dark .tab-btn:hover {
-  color: var(--text-primary);
+@media (hover: hover) {
+  html.dark .tab-btn:hover {
+    color: var(--text-primary);
+  }
 }
 
 html.dark .tab-btn.active {
@@ -573,10 +585,12 @@ html.dark .tab-btn.active {
   user-select: none;
 }
 
-.filter-chip:hover {
-  background: var(--muted);
-  color: var(--foreground);
-  border-color: color-mix(in srgb, var(--border), var(--foreground) 15%);
+@media (hover: hover) {
+  .filter-chip:hover {
+    background: var(--muted);
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--border), var(--foreground) 15%);
+  }
 }
 
 .filter-chip:active {
@@ -596,10 +610,12 @@ html.dark .filter-chip {
   border-color: var(--border);
 }
 
-html.dark .filter-chip:hover {
-  background: var(--muted);
-  color: var(--foreground);
-  border-color: color-mix(in srgb, var(--border), var(--foreground) 18%);
+@media (hover: hover) {
+  html.dark .filter-chip:hover {
+    background: var(--muted);
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--border), var(--foreground) 18%);
+  }
 }
 
 html.dark .filter-chip.active {
@@ -653,8 +669,10 @@ html.dark .pagination-btn {
   border-color: var(--border-color);
 }
 
-html.dark .pagination-btn:hover {
-  background: var(--bg-tertiary);
+@media (hover: hover) {
+  html.dark .pagination-btn:hover {
+    background: var(--bg-tertiary);
+  }
 }
 
 /* Search field */
@@ -685,10 +703,12 @@ html.dark .table-action-btn {
   color: var(--text-secondary);
 }
 
-html.dark .action-btn:hover,
-html.dark .table-action-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
+@media (hover: hover) {
+  html.dark .action-btn:hover,
+  html.dark .table-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
 }
 
 /* Modal / Dialog (legacy custom class only) */
@@ -737,8 +757,10 @@ html.dark .header-dropdown-item {
   color: var(--text-primary);
 }
 
-html.dark .header-dropdown-item:hover {
-  background: var(--bg-tertiary);
+@media (hover: hover) {
+  html.dark .header-dropdown-item:hover {
+    background: var(--bg-tertiary);
+  }
 }
 
 /* ==================== GLOBAL RESET ==================== */
@@ -910,8 +932,10 @@ h1, h2, h3, h4, [data-slot="card-title"] {
   border-radius: var(--border-radius);
 }
 
-.header-notification-btn:hover {
-  background: var(--bg-tertiary);
+@media (hover: hover) {
+  .header-notification-btn:hover {
+    background: var(--bg-tertiary);
+  }
 }
 
 .notification-badge {
@@ -989,8 +1013,10 @@ html.dark .cmdk-item {
   color: var(--text-primary);
 }
 
-html.dark .cmdk-item:hover {
-  background: var(--bg-tertiary);
+@media (hover: hover) {
+  html.dark .cmdk-item:hover {
+    background: var(--bg-tertiary);
+  }
 }
 
 html.dark .cmdk-item[data-selected="true"] {
@@ -1101,8 +1127,10 @@ html.dark [cmdk-group-heading] {
   border-radius: 50%;
 }
 
-.profile-avatar-upload:hover .profile-avatar-overlay {
-  opacity: 1;
+@media (hover: hover) {
+  .profile-avatar-upload:hover .profile-avatar-overlay {
+    opacity: 1;
+  }
 }
 
 .profile-avatar-loading {
@@ -1164,9 +1192,11 @@ html.dark [cmdk-group-heading] {
   background: var(--bg-secondary);
 }
 
-.image-upload-dropzone:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
+@media (hover: hover) {
+  .image-upload-dropzone:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
 }
 
 .image-upload-preview {
@@ -1202,8 +1232,10 @@ html.dark [cmdk-group-heading] {
   transition: var(--transition);
 }
 
-.image-upload-remove:hover {
-  background: var(--color-danger);
+@media (hover: hover) {
+  .image-upload-remove:hover {
+    background: var(--color-danger);
+  }
 }
 
 .image-upload-loading {
@@ -1261,9 +1293,11 @@ html.dark [cmdk-group-heading] {
   transition: var(--transition);
 }
 
-.attachment-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
+@media (hover: hover) {
+  .attachment-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
 .attachment-preview {
@@ -1277,8 +1311,10 @@ html.dark [cmdk-group-heading] {
   color: var(--text-muted);
 }
 
-.attachment-preview:hover {
-  opacity: 0.9;
+@media (hover: hover) {
+  .attachment-preview:hover {
+    opacity: 0.9;
+  }
 }
 
 .attachment-img {
@@ -1542,9 +1578,11 @@ html.dark [cmdk-group-heading] {
   transition: var(--transition);
 }
 
-.form-attachment-remove:hover {
-  background: #fef2f2;
-  color: var(--color-danger);
+@media (hover: hover) {
+  .form-attachment-remove:hover {
+    background: #fef2f2;
+    color: var(--color-danger);
+  }
 }
 
 .form-attachment-upload-btn {
@@ -1562,10 +1600,12 @@ html.dark [cmdk-group-heading] {
   transition: var(--transition);
 }
 
-.form-attachment-upload-btn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-light);
+@media (hover: hover) {
+  .form-attachment-upload-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
 }
 
 .form-attachment-upload-btn:disabled {
@@ -1718,9 +1758,11 @@ html.dark [cmdk-group-heading] {
   width: auto;
   min-width: 80px;
 }
-.rdp-dropdown_month select:hover,
-.rdp-dropdown_year select:hover {
-  border-color: var(--text-muted, #94a3b8);
+@media (hover: hover) {
+  .rdp-dropdown_month select:hover,
+  .rdp-dropdown_year select:hover {
+    border-color: var(--text-muted, #94a3b8);
+  }
 }
 .rdp-dropdown_month select:focus-visible,
 .rdp-dropdown_year select:focus-visible {
@@ -1897,7 +1939,9 @@ html.dark [cmdk-group-heading] {
 .stmt .indent-3 { padding-left: 48px; }
 .stmt .col-code { width: 68px; color: var(--doc-muted); }
 .stmt td a { color: var(--color-info, #2563eb); text-decoration: none; }
-.stmt td a:hover { text-decoration: underline; text-underline-offset: 2px; }
+@media (hover: hover) {
+  .stmt td a:hover { text-decoration: underline; text-underline-offset: 2px; }
+}
 .stmt .muted { color: var(--doc-muted); }
 .stmt-empty { padding: 14px 0; text-align: center; color: var(--doc-muted); font-size: 9pt; }
 
@@ -1909,12 +1953,14 @@ html.dark [cmdk-group-heading] {
     z-index: 10;
   }
 
-  .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
-    background-color: rgb(15 23 42 / 3.5%);
-  }
+  @media (hover: hover) {
+    .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
+      background-color: rgb(15 23 42 / 3.5%);
+    }
 
-  html.dark .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
-    background-color: rgb(255 255 255 / 3.5%);
+    html.dark .stmt tbody tr:not(.group):not(.subtotal):not(.total):not(.grand):hover td {
+      background-color: rgb(255 255 255 / 3.5%);
+    }
   }
 
   .stmt td a:focus-visible {

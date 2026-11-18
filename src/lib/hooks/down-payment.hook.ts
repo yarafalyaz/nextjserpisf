@@ -21,6 +21,8 @@ import {
   computeAllocationNet,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit";
+import { onSalesPaymentUpdated } from "@/lib/hooks/sales-payment.hook";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -190,6 +192,12 @@ async function onDownPaymentConfirmedInner(
         // "sudah teralokasi" — DP pengganti harus bisa membuat baris baru.
         where: activeSalesPaymentWhere({ salesInvoiceId: existingInv.id, notes: { contains: marker } }),
       })
+      const isPostedInvoice =
+        typeof existingInv.status === "string" &&
+        !["draft", "approved", "cancelled"].includes(existingInv.status);
+      const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx, [existingInv.id]);
+      const returnCredit = returnCreditMap.get(existingInv.id) ?? 0;
+      const returnCreditSen = Math.round(returnCredit * 100);
       // Create SalesPayment for this subsequent DP linked to the existing invoice
       if (Number(dp.amount) > 0 && !alreadyAllocated) {
         // AUD-R3-04 (putusan akuntan): PISAHKAN penerimaan kas dari alokasi.
@@ -199,11 +207,17 @@ async function onDownPaymentConfirmedInner(
         // menjumlah SalesPayment.amount sebagai pelunasan faktur.
         const prePaid = await tx.salesPayment.findMany({
           where: activeSalesPaymentWhere({ salesInvoiceId: existingInv.id }),
-          select: { amount: true, withholdingAmount: true },
+          select: { amount: true, withholdingAmount: true, notes: true },
         });
         const prePaidSen = Math.round(safeSum(prePaid.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
+        const dpPriorAllocated = safeSum(
+          prePaid
+            .filter((p) => (p.notes ?? "") === marker || (p.notes ?? "").startsWith(`${marker} `))
+            .map((p) => Number(p.amount)),
+          2,
+        );
         const invGrandSen = Math.round(Number(existingInv.grandTotal ?? 0) * 100);
-        const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen), 0);
+        const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen - returnCreditSen), 0);
         const payDocNo = await generateDocumentNumber("PAY");
         const allocPayment = await tx.salesPayment.create({
           data: {
@@ -251,42 +265,54 @@ async function onDownPaymentConfirmedInner(
             const netAlloc = dpSnapshot
               ? computeAllocationNet({
                   allocAmount,
-                  previouslyAllocated: prePaidSen / 100,
+                  previouslyAllocated: dpPriorAllocated,
                   snapshot: dpSnapshot,
                   dpAmount: Number(dp.amount),
                 })
               : { netAmount: allocAmount, ppnPortion: 0 };
             const dpTaxId = (dpSettings as { salesTaxAccountId?: number | null } | null)?.salesTaxAccountId ?? null;
-            if (netAlloc.ppnPortion > 0 && !dpTaxId) {
+            // C2: PPN UMP (210201) dipulihkan dengan DEBIT (bukan kredit) dan
+            // hanya pada alokasi ke faktur yang SUDAH posted (saat draft,
+            // onSalesInvoicePosted nantinya memposting J-PL1 Dr 210201 / Cr AR
+            // penuh untuk semua DP).
+            const includePpnReclassInAlloc = isPostedInvoice && netAlloc.ppnPortion > 0;
+            if (includePpnReclassInAlloc && !dpTaxId) {
               throw new Error(
                 "Akun PPN Keluaran (210201) belum dikonfigurasi, alokasi DP terutang ditolak",
               );
             }
+            const allocJournalAmount = includePpnReclassInAlloc
+              ? allocAmount
+              : netAlloc.netAmount;
             const allocEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [
-              { accountId: dpLiabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
-              { accountId: dpTaxId ?? 0, debit: 0, credit: netAlloc.ppnPortion, memo: "Reklas PPN uang muka alokasi" },
-              { accountId: dpArId, debit: 0, credit: netAlloc.netAmount, memo: "Pelunasan piutang via uang muka" },
+              { accountId: dpLiabilityId, debit: netAlloc.netAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
+              ...(includePpnReclassInAlloc
+                ? [{ accountId: dpTaxId ?? 0, debit: netAlloc.ppnPortion, credit: 0, memo: "Reklas PPN uang muka alokasi" }]
+                : []),
+              { accountId: dpArId, debit: 0, credit: allocJournalAmount, memo: "Pelunasan piutang via uang muka" },
             ].filter((e) => e.debit > 0 || e.credit > 0);
             // Putaran 51: akun terkonfigurasi-then-mati juga fail-closed,
             // bukan hanya belum terkonfigurasi (null).
-            await assertAccountsExist(tx, allocEntries.map((e) => e.accountId), "Alokasi DP");
-            await tx.journal.create({
-              data: {
-                journalNumber: allocJournalNo,
-                transactionDate: allocDate,
-                referenceType: "SalesPayment",
-                referenceId: allocPayment.id,
-                description: `Alokasi DP ${dp.documentNo} ke faktur ${existingInv.documentNo ?? existingInv.id}`,
-                type: "AUTO",
-                status: "POSTED",
-                totalDebit: allocAmount,
-                totalCredit: allocAmount,
-                createdBy: userId ?? null,
-                entries: {
-                  create: allocEntries,
+            if (allocJournalAmount > 0 && allocEntries.length >= 2) {
+              await assertAccountsExist(tx, allocEntries.map((e) => e.accountId), "Alokasi DP");
+              await tx.journal.create({
+                data: {
+                  journalNumber: allocJournalNo,
+                  transactionDate: allocDate,
+                  referenceType: "SalesPayment",
+                  referenceId: allocPayment.id,
+                  description: `Alokasi DP ${dp.documentNo} ke faktur ${existingInv.documentNo ?? existingInv.id}`,
+                  type: "AUTO",
+                  status: "POSTED",
+                  totalDebit: allocJournalAmount,
+                  totalCredit: allocJournalAmount,
+                  createdBy: userId ?? null,
+                  entries: {
+                    create: allocEntries,
+                  },
                 },
-              },
-            });
+              });
+            }
           }
         }
 
@@ -334,32 +360,36 @@ async function onDownPaymentConfirmedInner(
         // posted / approved) milik jalur posting resmi (postInvoice +
         // gate izin/approval/period-lock). Tanpa ini, faktur draft berubah
         // "posted" tanpa posting — stok-out + revenue/COGS lewat tanpa gate.
-        let paymentStatus: "posted" | "partial" | "paid" = existingInv.paymentStatus as "posted" | "partial" | "paid";
-        // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
-        if (isSettled(grandTotal, totalPaid)) {
-          paymentStatus = "paid";
-        } else if (totalPaid > 0) {
-          paymentStatus = "partial";
+        if (isPostedInvoice) {
+          await onSalesPaymentUpdated(existingInv.id, tx);
+        } else {
+          let paymentStatus: "posted" | "partial" | "paid" = existingInv.paymentStatus as "posted" | "partial" | "paid";
+          // FIN-BR-006 + M4: lunas dari outstanding valid (termasuk kredit retur) dalam toleransi Rp1.
+          if (isSettled(grandTotal, totalPaid + returnCredit)) {
+            paymentStatus = "paid";
+          } else if (totalPaid > 0) {
+            paymentStatus = "partial";
+          }
+
+          // BLOCKER-1 F-036-S: transisi ke paid di jalur ini WAJIB membekukan
+          // snapshot tarif komisi (resolver sama seperti recalcCore) — loader
+          // rekap menyaring faktur lunas; tanpa snapshot faktur ini terlewat.
+          const commissionSnapshot = await commissionSnapshotForPaid(
+            tx,
+            {
+              id: existingInv.id,
+              customerId: quotation.customerId,
+              date: existingInv.date as Date,
+              commissionRatePercent: existingInv.commissionRatePercent ?? null,
+            },
+            paymentStatus === "paid",
+          )
+
+          await tx.salesInvoice.update({
+            where: { id: existingInv.id },
+            data: { paidAmount: totalPaid, paymentStatus, ...commissionSnapshot },
+          });
         }
-
-        // BLOCKER-1 F-036-S: transisi ke paid di jalur ini WAJIB membekukan
-        // snapshot tarif komisi (resolver sama seperti recalcCore) — loader
-        // rekap menyaring faktur lunas; tanpa snapshot faktur ini terlewat.
-        const commissionSnapshot = await commissionSnapshotForPaid(
-          tx,
-          {
-            id: existingInv.id,
-            customerId: quotation.customerId,
-            date: existingInv.date as Date,
-            commissionRatePercent: existingInv.commissionRatePercent ?? null,
-          },
-          paymentStatus === "paid",
-        )
-
-        await tx.salesInvoice.update({
-          where: { id: existingInv.id },
-          data: { paidAmount: totalPaid, paymentStatus, ...commissionSnapshot },
-        });
       }
 
       // Mark this DP as confirmed
@@ -827,7 +857,11 @@ async function onDownPaymentConfirmedInner(
         },
       });
       allocatedSen += vdpSen
-      if (journalSen > 0) {
+      const vdpSnapshot = snapshotFromDownPaymentRow(vdp as never);
+      // C2: untuk DP terutang PPN (ppnUangMuka > 0), penutupan 210102 dan
+      // reklas 210201 (J-PL1 + J-PL2) ditangani penuh oleh onSalesInvoicePosted
+      // saat faktur diposting agar tidak membukukan bruto 210102/mengkredit AR ganda.
+      if (journalSen > 0 && (!vdpSnapshot || vdpSnapshot.ppnUangMuka <= 0)) {
         if (!allocAccounts) {
           const dpSettings = await tx.systemSetting.findFirst();
           const liabilityId = (dpSettings as { customerDownPaymentAccountId?: number | null } | null)?.customerDownPaymentAccountId ?? null;

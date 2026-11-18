@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/shadcn/dialog"
 import { formatCurrencyExact, formatDate } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import {
   SALES_LATE_FEE_ACCOUNT_UNSET_TEXT,
   SALES_LATE_FEE_NOTICE_TEXT,
@@ -73,15 +74,17 @@ function TermForm({
     else formData.delete("ratePercentPerDay")
     formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
-      const result = await createCustomerLateFeeTerm(formData)
-      if (!result.success) {
-        showError(result.error ?? "Gagal menyimpan syarat denda.")
-        return
-      }
-      idempotencyKeyRef.current = newIdempotencyKey()
-      showSuccess("Syarat denda pelanggan tersimpan.")
-      onDone()
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await createCustomerLateFeeTerm(formData)
+        if (!result.success) {
+          showError(result.error ?? "Gagal menyimpan syarat denda.")
+          return
+        }
+        idempotencyKeyRef.current = newIdempotencyKey()
+        showSuccess("Syarat denda pelanggan tersimpan.")
+        onDone()
+        router.refresh()
+      }, "Gagal menyimpan syarat denda.")
     })
   }
 
@@ -172,19 +175,21 @@ function IssueForm({
     const formData = new FormData(event.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
-      const result = await issueSalesLateFee(formData)
-      if (!result.success) {
-        showError(result.error ?? "Gagal menerbitkan dokumen denda.")
-        return
-      }
-      idempotencyKeyRef.current = newIdempotencyKey()
-      showSuccess(
-        result.documentNo
-          ? `Dokumen denda ${result.documentNo} diterbitkan.`
-          : "Dokumen denda diterbitkan.",
-      )
-      onDone()
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await issueSalesLateFee(formData)
+        if (!result.success) {
+          showError(result.error ?? "Gagal menerbitkan dokumen denda.")
+          return
+        }
+        idempotencyKeyRef.current = newIdempotencyKey()
+        showSuccess(
+          result.documentNo
+            ? `Dokumen denda ${result.documentNo} diterbitkan.`
+            : "Dokumen denda diterbitkan.",
+        )
+        onDone()
+        router.refresh()
+      }, "Gagal menerbitkan dokumen denda.")
     })
   }
 
@@ -261,15 +266,17 @@ function PayForm({
     const formData = new FormData(event.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
-      const result = await paySalesLateFee(formData)
-      if (!result.success) {
-        showError(result.error ?? "Gagal mencatat pembayaran denda.")
-        return
-      }
-      idempotencyKeyRef.current = newIdempotencyKey()
-      showSuccess("Pembayaran dokumen denda tercatat.")
-      onDone()
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await paySalesLateFee(formData)
+        if (!result.success) {
+          showError(result.error ?? "Gagal mencatat pembayaran denda.")
+          return
+        }
+        idempotencyKeyRef.current = newIdempotencyKey()
+        showSuccess("Pembayaran dokumen denda tercatat.")
+        onDone()
+        router.refresh()
+      }, "Gagal mencatat pembayaran denda.")
     })
   }
 
@@ -360,16 +367,18 @@ function ReverseForm({
     const formData = new FormData(form)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
     startTransition(async () => {
-      const result = await reverseSalesLateFee(formData)
-      if (!result.success) {
-        showError(result.error ?? "Gagal membalik dokumen denda.")
-        return
-      }
-      idempotencyKeyRef.current = newIdempotencyKey()
-      showSuccess("Dokumen denda dibalik.")
-      setConfirmOpen(false)
-      onDone()
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await reverseSalesLateFee(formData)
+        if (!result.success) {
+          showError(result.error ?? "Gagal membalik dokumen denda.")
+          return
+        }
+        idempotencyKeyRef.current = newIdempotencyKey()
+        showSuccess("Dokumen denda dibalik.")
+        setConfirmOpen(false)
+        onDone()
+        router.refresh()
+      }, "Gagal membalik dokumen denda.")
     })
   }
 

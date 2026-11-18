@@ -133,16 +133,16 @@ export function InvoiceItemsEditor({
       item.uom = selectedItem?.unitOfMeasure ?? null;
       item.serialNumbers = [];
     } else if (field === "qty") {
-      item.qty = Number(value) || 0;
+      item.qty = Math.max(0, Number(value) || 0);
     } else if (field === "unitPrice") {
-      item.unitPrice = Number(value) || 0;
+      item.unitPrice = Math.max(0, Number(value) || 0);
     } else if (field === "discount") {
-      item.discount = Number(value) || 0;
+      item.discount = Math.max(0, Number(value) || 0);
     } else if (field === "uom") {
       item.uom = String(value);
     }
 
-    item.total = item.qty * item.unitPrice - item.discount;
+    item.total = Math.max(0, item.qty * item.unitPrice - item.discount);
     updated[index] = item;
     setItems(updated);
   }
@@ -165,6 +165,18 @@ export function InvoiceItemsEditor({
     }
     if (items.some((item) => !item.itemId || item.qty <= 0)) {
       showError("Semua item harus memiliki produk dan qty > 0");
+      return;
+    }
+    if (items.some((item) => item.unitPrice < 0 || item.discount < 0)) {
+      showError("Harga satuan dan diskon tidak boleh negatif");
+      return;
+    }
+    if (!Number.isFinite(discount) || discount < 0) {
+      showError("Diskon total tidak boleh negatif");
+      return;
+    }
+    if (!Number.isFinite(tax) || tax < 0 || tax > 100) {
+      showError("Pajak (%) harus di antara 0 dan 100");
       return;
     }
 
@@ -538,7 +550,7 @@ export function InvoiceItemsEditor({
                   <Button
                     type="button"
                     onPress={() => removeItem(i)}
-                    className="shrink-0 text-danger hover:text-danger/80 text-lg min-h-10 min-w-10"
+                    className="shrink-0 text-danger hover:text-danger/80 text-lg min-h-11 min-w-11 md:min-h-9 md:min-w-9"
                     title="Hapus item"
                     aria-label={`Hapus item baris ${i + 1}`}
                   >
@@ -556,7 +568,7 @@ export function InvoiceItemsEditor({
                       min={1}
                       value={item.qty}
                       onChange={(e) => updateItem(i, "qty", e.target.value)}
-                      className="w-full text-right text-xs font-mono tabular-nums h-9"
+                      className="w-full text-right text-xs font-mono tabular-nums h-11 md:h-9"
                     />
                   </div>
                   <div>
@@ -569,6 +581,7 @@ export function InvoiceItemsEditor({
                     </label>
                     <CurrencyInput
                       id={`m-invoice-item-price-${i}`}
+                      min={0}
                       value={item.unitPrice}
                       onChange={(v) => updateItem(i, "unitPrice", v)}
                       className="w-full text-right font-mono text-sm tabular-nums"
@@ -580,6 +593,7 @@ export function InvoiceItemsEditor({
                     </label>
                     <CurrencyInput
                       id={`m-invoice-item-discount-${i}`}
+                      min={0}
                       value={item.discount}
                       onChange={(v) => updateItem(i, "discount", v)}
                       className="w-full text-right font-mono text-sm tabular-nums"
@@ -724,12 +738,13 @@ export function InvoiceItemsEditor({
                         min={1}
                         value={item.qty}
                         onChange={(e) => updateItem(i, "qty", e.target.value)}
-                        className="w-full text-right text-xs font-mono tabular-nums h-9"
+                        className="w-full text-right text-xs font-mono tabular-nums h-11 md:h-9"
                       />
                     </td>
                     <td className="py-2 px-1 align-top">
                       <CurrencyInput
                         aria-label={`Harga satuan baris ${i + 1}`}
+                        min={0}
                         value={item.unitPrice}
                         onChange={(v) => updateItem(i, "unitPrice", v)}
                         className="w-full text-right font-mono text-sm tabular-nums"
@@ -738,6 +753,7 @@ export function InvoiceItemsEditor({
                     <td className="py-2 px-1 align-top">
                       <CurrencyInput
                         aria-label={`Diskon baris ${i + 1}`}
+                        min={0}
                         value={item.discount}
                         onChange={(v) => updateItem(i, "discount", v)}
                         className="w-full text-right font-mono text-sm tabular-nums"
@@ -813,6 +829,7 @@ export function InvoiceItemsEditor({
             <span className="text-muted-foreground">Diskon Total:</span>
             <CurrencyInput
               aria-label="Diskon total"
+              min={0}
               value={discount}
               onChange={setDiscount}
               className="w-32 text-right font-mono text-sm tabular-nums"
@@ -830,8 +847,11 @@ export function InvoiceItemsEditor({
               max={100}
               step={0.5}
               value={tax}
-              onChange={(e) => setTax(Number(e.target.value))}
-              className="w-20 text-right text-xs font-mono tabular-nums h-9"
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setTax(Number.isFinite(val) ? Math.min(100, Math.max(0, val)) : 0);
+              }}
+              className="w-20 text-right text-xs font-mono tabular-nums h-11 md:h-9"
             />
           </div>
           <div className="flex items-center gap-3 text-sm font-bold font-mono tabular-nums">

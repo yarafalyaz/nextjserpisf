@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   const expenseCreate = vi.fn()
   const settingsFindFirst = vi.fn()
   const accountFindMany = vi.fn()
+  const requestApprovalIfConfigured = vi.fn()
 
   const prisma: Record<string, unknown> = {
     recurringTransaction: {
@@ -54,9 +55,14 @@ const mocks = vi.hoisted(() => {
     expenseCreate,
     settingsFindFirst,
     accountFindMany,
+    requestApprovalIfConfigured,
     prisma,
   }
 })
+
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  requestApprovalIfConfigured: (...a: unknown[]) => mocks.requestApprovalIfConfigured(...a),
+}))
 
 vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks))
 vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
@@ -98,6 +104,8 @@ beforeEach(() => {
   mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202001-00001" })
+  mocks.expenseCreate.mockResolvedValue({ id: 55, documentNo: "EXP-202001-00001" })
+  mocks.requestApprovalIfConfigured.mockResolvedValue({})
   // Gerbang akun hidup putaran 51: default semua akun template hidup.
   mocks.accountFindMany.mockImplementation(async (args: any) => (args.where.id.in as number[]).map((id) => ({ id })))
   mocks.generateDocumentNumber.mockResolvedValue("JRN-202001-00001")
@@ -273,5 +281,39 @@ describe("runRecurringNow — jadwal terhapus/nonaktif", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.expenseCreate).not.toHaveBeenCalled()
     expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("M2: runRecurringNow submits generated drafts to approval workflow", () => {
+  it("submits generated Journal to approval workflow inside tx", async () => {
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "Journal",
+      9,
+      1,
+      mocks.prisma,
+    )
+  })
+
+  it("submits generated Expense to approval workflow inside tx", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({
+      ...schedule,
+      type: "expense",
+      template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000 }),
+    })
+    mocks.generateDocumentNumber.mockResolvedValue("EXP-202001-00001")
+    mocks.expenseCreate.mockResolvedValue({ id: 55, documentNo: "EXP-202001-00001" })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.requestApprovalIfConfigured).toHaveBeenCalledWith(
+      "Expense",
+      55,
+      1,
+      mocks.prisma,
+    )
   })
 })

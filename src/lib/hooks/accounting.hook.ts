@@ -995,7 +995,7 @@ export async function onSalesInvoicePosted(
             (line as { serialNumbers?: unknown[] }).serialNumbers as unknown[]
           ).map((s) => String(s))
         : null;
-      const { consumedCost, shortfall, consumedLayers } = await consumeFifoLayers(tx, {
+      const { consumedCost, shortfall, consumedLayers, consumedSerials } = await consumeFifoLayers(tx, {
         itemId: line.itemId,
         warehouseId: info.defaultWarehouseId,
         qty,
@@ -1005,14 +1005,26 @@ export async function onSalesInvoicePosted(
         // seperti material issue (F-79). Biaya tetap lapisan FIFO.
         documentDate: invoice.date,
       });
-      // STOK-01: simpan atribusi konsumsi per layer pada baris faktur —
-      // satu-satunya catatan lot/cost yang benar-benar keluar untuk baris
-      // ini. Void memulihkan lot persis dari sini; retur menilai restock
-      // pada cost asal. qty dalam satuan dasar (sudah dikonversi UoM).
-      if ((consumedLayers ?? []).length > 0 && typeof tx.salesInvoiceItem?.update === "function") {
+      // STOK-01 + H4: simpan atribusi konsumsi per layer DAN serial number yang
+      // dipilih otomatis oleh FIFO pada baris faktur agar void/retur memulihkan
+      // lot dan serial yang benar-benar dikonsumsi.
+      const shouldPersistBatch = (consumedLayers ?? []).length > 0;
+      const shouldPersistAutoSerials =
+        (lineSerials == null || lineSerials.length === 0) && (consumedSerials ?? []).length > 0;
+      if ((shouldPersistBatch || shouldPersistAutoSerials) && typeof tx.salesInvoiceItem?.update === "function") {
+        const lineUpdateData: {
+          batchAllocations?: Prisma.InputJsonValue;
+          serialNumbers?: Prisma.InputJsonValue;
+        } = {};
+        if (shouldPersistBatch) {
+          lineUpdateData.batchAllocations = (consumedLayers ?? []) as unknown as Prisma.InputJsonValue;
+        }
+        if (shouldPersistAutoSerials) {
+          lineUpdateData.serialNumbers = consumedSerials as unknown as Prisma.InputJsonValue;
+        }
         await tx.salesInvoiceItem.update({
           where: { id: line.id },
-          data: { batchAllocations: (consumedLayers ?? []) as unknown as Prisma.InputJsonValue },
+          data: lineUpdateData,
         });
       }
       const lineCogs = consumedCost + shortfall * fallbackUnitCost;

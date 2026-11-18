@@ -186,7 +186,7 @@ export default async function WorkshopDashboard() {
                 </CardTitle>
                 <CardDescription>Proyek aktif dan tahap pengerjaannya</CardDescription>
                 <CardAction>
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Button asChild variant="ghost" size="sm" className="min-h-11 md:min-h-8 md:h-8 text-xs">
                     <Link href="/proyek">
                       Semua <ArrowUpRight aria-hidden="true" className="size-3.5" />
                     </Link>
@@ -335,7 +335,7 @@ export default async function WorkshopDashboard() {
                       <div className="truncate text-[11px] text-muted-foreground">{link.desc}</div>
                     </div>
                   </div>
-                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group- group-hover:text-foreground" />
+                  <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors duration-150 group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </Link>
               ))}
             </div>

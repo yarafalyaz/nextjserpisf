@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { addProjectLog } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -31,19 +32,21 @@ export function ProjectLogForm({ projectId, canCreate = true }: { projectId: num
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const fd = new FormData(form)
-      fd.set("action", action)
-      fd.set("idempotencyKey", idempotencyKeyRef.current)
-      const res = await addProjectLog(projectId, fd)
-      if (!res.success) {
-        showError(res.error || "Gagal menambahkan log")
-        return
-      }
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess("Log ditambahkan")
-      form.reset()
-      setAction("Progres")
-      router.refresh()
+      await runUiAction(async () => {
+        const fd = new FormData(form)
+        fd.set("action", action)
+        fd.set("idempotencyKey", idempotencyKeyRef.current)
+        const res = await addProjectLog(projectId, fd)
+        if (!res.success) {
+          showError(res.error || "Gagal menambahkan log")
+          return
+        }
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess("Log ditambahkan")
+        form.reset()
+        setAction("Progres")
+        router.refresh()
+      }, "Gagal menambahkan log")
     })
   }
 

@@ -5,11 +5,12 @@ import { useMemo, useState, useTransition } from "react"
 
 import { markVendorPaymentsTransferred, unmarkVendorPaymentsTransferred } from "@/actions/vendor-transfer.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 import { formatAccountingExact, formatCurrencyExact } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
@@ -33,7 +34,7 @@ export function VendorTransferPanel({ rows, canEdit = true }: { rows: TransferIn
   const [isPending, startTransition] = useTransition()
 
   const [selected, setSelected] = useState<number[]>([])
-  const [date, setDate] = useState(toLocalDateOnly(new Date()))
+  const [date, setDate] = useState(wibDateOnly(new Date()))
   const [reference, setReference] = useState("")
 
   const pending = rows.filter((row) => !row.transferredAt)
@@ -53,27 +54,29 @@ export function VendorTransferPanel({ rows, canEdit = true }: { rows: TransferIn
       return
     }
     startTransition(async () => {
-      const formData = new FormData()
-      for (const id of selected) formData.append("paymentIds", String(id))
-      formData.set("date", date)
-      formData.set("reference", reference)
+      await runUiAction(async () => {
+        const formData = new FormData()
+        for (const id of selected) formData.append("paymentIds", String(id))
+        formData.set("date", date)
+        formData.set("reference", reference)
 
-      const result =
-        kind === "mark"
-          ? await markVendorPaymentsTransferred(formData)
-          : await unmarkVendorPaymentsTransferred(formData)
-
-      if (result.success) {
-        showSuccess(
+        const result =
           kind === "mark"
-            ? `${result.updated} pembayaran ditandai sudah ditransfer.`
-            : `${result.updated} penanda transfer dibatalkan.`,
-        )
-        setSelected([])
-        router.refresh()
-      } else {
-        showError(result.error ?? "Gagal menyimpan.")
-      }
+            ? await markVendorPaymentsTransferred(formData)
+            : await unmarkVendorPaymentsTransferred(formData)
+
+        if (result.success) {
+          showSuccess(
+            kind === "mark"
+              ? `${result.updated} pembayaran ditandai sudah ditransfer.`
+              : `${result.updated} penanda transfer dibatalkan.`,
+          )
+          setSelected([])
+          router.refresh()
+        } else {
+          showError(result.error ?? "Gagal menyimpan.")
+        }
+      }, "Gagal menyimpan.")
     })
   }
 

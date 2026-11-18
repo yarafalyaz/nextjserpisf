@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface Variant {
   id: number
@@ -152,12 +153,12 @@ export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormPr
           <Input id="year" name="year" type="number" placeholder="2024" min={1900} max={2100} defaultValue={vehicle?.year ?? ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()}>Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-vehicle">
+      <FormActions>
+        <Button type="button" onPress={() => router.back()} className="w-full md:w-auto">Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-vehicle" className="w-full md:w-auto">
           {isPending ? "Menyimpan..." : vehicle?.id ? "Perbarui" : "Simpan"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }

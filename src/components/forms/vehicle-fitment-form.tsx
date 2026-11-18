@@ -10,6 +10,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 import {
   createVehicleFitment,
@@ -129,23 +130,25 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
     if (!itemId) return showError("Item wajib dipilih")
 
     startTransition(async () => {
-      const formData = buildScopeFormData()
-      const source = (e.currentTarget.elements.namedItem("source") as HTMLTextAreaElement | null)?.value
-      const notes = (e.currentTarget.elements.namedItem("notes") as HTMLTextAreaElement | null)?.value
-      if (source) formData.set("source", source)
-      if (notes) formData.set("notes", notes)
-      formData.set("isActive", isActive ? "true" : "false")
+      await runUiAction(async () => {
+        const formData = buildScopeFormData()
+        const source = (e.currentTarget.elements.namedItem("source") as HTMLTextAreaElement | null)?.value
+        const notes = (e.currentTarget.elements.namedItem("notes") as HTMLTextAreaElement | null)?.value
+        if (source) formData.set("source", source)
+        if (notes) formData.set("notes", notes)
+        formData.set("isActive", isActive ? "true" : "false")
 
-      if (!rule?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!)
-      const res = rule?.id
-        ? await updateVehicleFitment(rule.id, formData)
-        : await createVehicleFitment(formData)
+        if (!rule?.id) formData.set("idempotencyKey", idempotencyKeyRef.current!)
+        const res = rule?.id
+          ? await updateVehicleFitment(rule.id, formData)
+          : await createVehicleFitment(formData)
 
-      if (!res.success) return showError(res.error || "Gagal menyimpan aturan fitment")
-      idempotencyKeyRef.current = crypto.randomUUID()
-      showSuccess(rule?.id ? "Aturan fitment diperbarui" : "Aturan fitment ditambahkan")
-      router.push("/kendaraan/fitment")
-      router.refresh()
+        if (!res.success) return showError(res.error || "Gagal menyimpan aturan fitment")
+        idempotencyKeyRef.current = crypto.randomUUID()
+        showSuccess(rule?.id ? "Aturan fitment diperbarui" : "Aturan fitment ditambahkan")
+        router.push("/kendaraan/fitment")
+        router.refresh()
+      }, "Gagal menyimpan aturan fitment")
     })
   }
 

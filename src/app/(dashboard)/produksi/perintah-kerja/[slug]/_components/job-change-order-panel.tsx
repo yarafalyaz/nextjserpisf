@@ -395,6 +395,7 @@ export function JobChangeOrderPanel({
                       selectable={false}
                       enableColumnToggle={false}
                       enableExport={false}
+                      showPagination={false}
                       pageSize={50}
                     />
                   ) : null}

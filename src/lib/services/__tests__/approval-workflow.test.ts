@@ -3,8 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   findFirstWorkflow: vi.fn(),
   findFirstApproval: vi.fn(),
+  findUniqueApproval: vi.fn(),
   createApproval: vi.fn(),
+  updateApproval: vi.fn().mockResolvedValue({}),
+  updateManyApproval: vi.fn().mockResolvedValue({ count: 1 }),
+  findFirstHistory: vi.fn().mockResolvedValue(null),
   queryRaw: vi.fn().mockResolvedValue([]),
+  executeRaw: vi.fn().mockResolvedValue(1),
   docFindUnique: vi.fn(),
   approvalSlugFindFirst: vi.fn().mockResolvedValue(null),
   // R6WN-03 notify mocks
@@ -16,56 +21,43 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => {
   const docModelMock = { findUnique: mocks.docFindUnique };
+  const txObj = {
+    approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
+    approval: {
+      findFirst: (...args: unknown[]) =>
+        (args[0] as { select?: unknown })?.select
+          ? mocks.approvalSlugFindFirst(...args)
+          : mocks.findFirstApproval(...args),
+      findUnique: (...args: unknown[]) => mocks.findUniqueApproval(...args),
+      create: (...args: unknown[]) => mocks.createApproval(...args),
+      update: (...args: unknown[]) => mocks.updateApproval(...args),
+      updateMany: (...args: unknown[]) => mocks.updateManyApproval(...args),
+    },
+    approvalHistory: { findFirst: (...args: unknown[]) => mocks.findFirstHistory(...args) },
+    journal: docModelMock,
+    vendorPayment: docModelMock,
+    stockAdjustment: docModelMock,
+    salesInvoice: docModelMock,
+    asset: docModelMock,
+    quotation: docModelMock,
+    project: docModelMock,
+    approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
+    user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
+    notification: { createMany: mocks.createManyNotifications },
+    $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
+    $executeRaw: (...args: unknown[]) => mocks.executeRaw(...args),
+  };
   return {
     prisma: {
-      approvalWorkflow: {
-        findFirst: mocks.findFirstWorkflow,
-      },
-      approval: {
-        findFirst: (...args: unknown[]) =>
-          (args[0] as { select?: unknown })?.select
-            ? mocks.approvalSlugFindFirst(...args)
-            : mocks.findFirstApproval(...args),
-        create: mocks.createApproval,
-      },
-      journal: docModelMock,
-      vendorPayment: docModelMock,
-      stockAdjustment: docModelMock,
-      salesInvoice: docModelMock,
-      asset: docModelMock,
-      quotation: docModelMock,
-      project: docModelMock,
-      approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
-      user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
-      notification: { createMany: mocks.createManyNotifications },
-      $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
-      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
-        approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
-        approval: {
-          findFirst: (...args: unknown[]) =>
-            (args[0] as { select?: unknown })?.select
-              ? mocks.approvalSlugFindFirst(...args)
-              : mocks.findFirstApproval(...args),
-          create: (...args: unknown[]) => mocks.createApproval(...args),
-        },
-        journal: docModelMock,
-        vendorPayment: docModelMock,
-        stockAdjustment: docModelMock,
-        salesInvoice: docModelMock,
-        asset: docModelMock,
-        quotation: docModelMock,
-        project: docModelMock,
-        approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
-        user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
-        notification: { createMany: mocks.createManyNotifications },
-        $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
-      })),
+      ...txObj,
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(txObj)),
     },
   };
 });
 
 import {
   requestApprovalIfConfigured,
+  resetApprovalOnEditIfExists,
   assertApproved,
 } from "@/lib/services/approval-workflow.service";
 
@@ -73,8 +65,16 @@ describe("approval-workflow.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.queryRaw.mockResolvedValue([{ id: 10 }]);
+    mocks.executeRaw.mockResolvedValue(1);
+    mocks.findUniqueApproval.mockResolvedValue(null);
+    mocks.updateManyApproval.mockResolvedValue({ count: 1 });
+    mocks.findFirstHistory.mockResolvedValue(null);
     mocks.docFindUnique.mockResolvedValue(null);
     mocks.approvalSlugFindFirst.mockResolvedValue(null);
+    mocks.findWorkflowSteps.mockResolvedValue([]);
+    mocks.findManyUsers.mockResolvedValue([]);
+    mocks.findFirstUser.mockResolvedValue(null);
+    mocks.createManyNotifications.mockResolvedValue({ count: 1 });
   });
 
   describe("requestApprovalIfConfigured", () => {
@@ -360,6 +360,72 @@ describe("approval-workflow.service", () => {
       expect(mocks.createApproval).toHaveBeenCalledWith({
         data: expect.objectContaining({
           requestedBy: null,
+        }),
+      });
+    });
+
+    it("H1: pending pada currentStep > 1 dibatalkan dan approval baru dimulai dari langkah 1 + notifikasi ulang Langkah 1", async () => {
+      const pendingStep2 = { id: 55, status: "pending", currentStep: 2, requestedBy: 42 };
+      mocks.findFirstApproval.mockResolvedValue(pendingStep2);
+      mocks.findUniqueApproval.mockResolvedValue(pendingStep2);
+      mocks.createApproval.mockResolvedValue({ id: 56, status: "pending", currentStep: 1 });
+      mocks.findWorkflowSteps.mockResolvedValue([
+        { stepOrder: 1, roleId: null, userId: 9, name: "Supervisor" },
+        { stepOrder: 2, roleId: null, userId: 10, name: "Direktur" },
+      ]);
+      mocks.findFirstUser.mockResolvedValue({ id: 9 });
+
+      const result = await requestApprovalIfConfigured("Journal", 7, 42);
+
+      expect(result).toBe(true);
+      expect(mocks.updateManyApproval).toHaveBeenCalledWith({
+        where: { id: 55, status: "pending" },
+        data: expect.objectContaining({ status: "cancelled" }),
+      });
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          workflowId: 10,
+          referenceType: "Journal",
+          referenceId: 7,
+          currentStep: 1,
+          status: "pending",
+          requestedBy: 42,
+        }),
+      });
+      expect(mocks.createManyNotifications).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            userId: 9,
+            title: expect.stringContaining("Persetujuan Menunggu"),
+            body: expect.stringContaining("langkah 1"),
+          }),
+        ],
+      });
+    });
+
+    it("H1: resetApprovalOnEditIfExists tidak membuat approval baru bila belum ada (existingOnly), tetapi mereset bila pending currentStep > 1", async () => {
+      mocks.findFirstApproval.mockResolvedValue(null);
+      const noExisting = await resetApprovalOnEditIfExists("SalesOrder", 12, 42);
+      expect(noExisting).toBe(false);
+      expect(mocks.createApproval).not.toHaveBeenCalled();
+
+      const pendingStep2 = { id: 70, status: "pending", currentStep: 2, requestedBy: 42 };
+      mocks.findFirstApproval.mockResolvedValue(pendingStep2);
+      mocks.findUniqueApproval.mockResolvedValue(pendingStep2);
+      mocks.createApproval.mockResolvedValue({ id: 71, status: "pending", currentStep: 1 });
+
+      const reset = await resetApprovalOnEditIfExists("SalesOrder", 12, 42);
+      expect(reset).toBe(true);
+      expect(mocks.updateManyApproval).toHaveBeenCalledWith({
+        where: { id: 70, status: "pending" },
+        data: expect.objectContaining({ status: "cancelled" }),
+      });
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          referenceType: "SalesOrder",
+          referenceId: 12,
+          currentStep: 1,
+          status: "pending",
         }),
       });
     });

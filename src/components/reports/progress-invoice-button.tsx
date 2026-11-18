@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Percent } from "@/components/ui/fontawesome-icons"
 import { createProgressInvoice } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 
@@ -29,13 +30,15 @@ export function ProgressInvoiceButton({ quotationId }: Readonly<{ quotationId: n
       return
     }
     startTransition(async () => {
-      const result = await createProgressInvoice(quotationId, targetPercent)
-      if (!result.success) {
-        showError(result.error || "Gagal membuat faktur progres")
-        return
-      }
-      showSuccess("Faktur progres dibuat")
-      router.push(`/penjualan/faktur/${result.slug}`)
+      await runUiAction(async () => {
+        const result = await createProgressInvoice(quotationId, targetPercent)
+        if (!result.success) {
+          showError(result.error || "Gagal membuat faktur progres")
+          return
+        }
+        showSuccess("Faktur progres dibuat")
+        router.push(`/penjualan/faktur/${result.slug}`)
+      }, "Gagal membuat faktur progres")
     })
   }
 

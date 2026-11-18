@@ -16,7 +16,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
-import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { wibDateOnly } from "@/lib/utils/date-only"
 
 interface AssetTransferFormProps {
   assets: { id: number; code: string; name: string; location: string | null }[];
@@ -45,7 +45,7 @@ export function AssetTransferForm({
   if (idempotencyKeyRef.current === null) idempotencyKeyRef.current = crypto.randomUUID();
   const [isPending, startTransition] = useTransition();
   const [transferDate, setTransferDate] = useState(
-    transfer?.transferDate || toLocalDateOnly(new Date()),
+    transfer?.transferDate || wibDateOnly(new Date()),
   );
   const [assetId, setAssetId] = useState(
     transfer?.assetId ? String(transfer.assetId) : "",

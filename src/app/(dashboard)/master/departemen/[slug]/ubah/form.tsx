@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateDepartment } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { runUiAction } from "@/components/ui/async-action"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
+import { FormActions } from "@/components/ui/form-section"
 
 interface EditDepartmentFormProps {
   department: {
@@ -26,14 +28,16 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      const result = await updateDepartment(department.id, formData)
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan data")
-        return
-      }
-      showSuccess("Departemen berhasil diperbarui")
-      router.push("/master/departemen")
-      router.refresh()
+      await runUiAction(async () => {
+        const result = await updateDepartment(department.id, formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Departemen berhasil diperbarui")
+        router.push("/master/departemen")
+        router.refresh()
+      }, "Gagal menyimpan data")
     })
   }
 
@@ -56,12 +60,12 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
-        <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
-        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-department">
+      <FormActions>
+        <Button className="w-full md:w-auto" type="button" onPress={() => router.back()} >Batal</Button>
+        <Button className="w-full md:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-department">
           {isPending ? "Menyimpan..." : "Perbarui"}
         </Button>
-      </div>
+      </FormActions>
     </form>
   )
 }
